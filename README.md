@@ -29,7 +29,7 @@ Windows shows a SmartScreen warning: *More info → Run anyway*.
 pnpm install
 pnpm dev        # hot-reloading development
 pnpm start      # run the built app
-pnpm test       # 126 unit tests
+pnpm test       # 136 unit tests
 
 pnpm release        # macOS (arm64 + x64) and Windows (x64) into release/
 pnpm release:mac
@@ -121,6 +121,12 @@ against the real product, and severity is a Jira field rather than prose. *Send 
 the cropped defect shots and the annotated full page so a vision model can
 describe what it sees; turn it off for models without vision, or when pages under
 test show data that must not leave the machine.
+
+**Site logins** — sites behind HTTP Basic/Digest auth (most QA staging) prompt
+for credentials in-app, since Chromium's own sheet is unavailable inside a
+`<webview>`. Credentials can be remembered per origin+realm and are stored in a
+separate `logins.json` (`0600`), never in `settings.json` and never in a ticket.
+Clear them from Settings → General.
 
 Settings live in `settings.json` under the app's userData directory, written
 `0600`. Nothing is sent anywhere except the Jira and LLM endpoints you configure.

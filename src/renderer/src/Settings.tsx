@@ -19,8 +19,10 @@ export default function Settings(): JSX.Element | null {
   const [projects, setProjects] = useState<JiraProject[]>([]);
   const [boards, setBoards] = useState<JiraBoard[]>([]);
   const [saved, setSaved] = useState(false);
+  const [logins, setLogins] = useState(0);
 
   useEffect(() => { if (settingsOpen) { setDraft(settings); setProbe({ kind: "idle" }); } }, [settingsOpen, settings]);
+  useEffect(() => { if (settingsOpen) void window.tester.auth.savedCount().then(setLogins); }, [settingsOpen]);
 
   if (!settingsOpen) return null;
 
@@ -275,6 +277,27 @@ export default function Settings(): JSX.Element | null {
                 <input className="field" value={draft.tester}
                   onChange={(e) => setDraft({ ...draft, tester: e.target.value })}
                   placeholder="Stamped in the ticket footer" />
+              </div>
+
+              {/* Site logins are stored apart from settings, so clearing them is
+                  a distinct, obvious action rather than buried in a form. */}
+              <div className="glass-inset rounded-xl p-3">
+                <div className="flex items-center gap-2">
+                  <Icon name="user" size={13} className="opacity-60" />
+                  <span className="text-[13px]">Saved site logins</span>
+                  <span className="chip !py-0.5 !text-[10px]">{logins}</span>
+                  <span className="flex-1" />
+                  <button className="btn btn--ghost !px-2.5 !py-1 !text-[11.5px]"
+                    disabled={!logins}
+                    onClick={() => { void window.tester.auth.forgetAll().then(() => setLogins(0)); }}>
+                    <Icon name="trash" size={12} /> Forget all
+                  </button>
+                </div>
+                <div className="faint mt-1.5 text-[10.5px] leading-relaxed">
+                  Usernames and passwords you chose to remember for sites behind
+                  HTTP authentication. Kept in a private file on this machine,
+                  never in a ticket.
+                </div>
               </div>
             </>
           )}

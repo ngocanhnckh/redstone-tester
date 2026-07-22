@@ -10,6 +10,7 @@ import type {
 import type { CreateOpts } from "../main/jira.js";
 import type { Review, ReviewInput } from "../main/llm.js";
 import type { Workspace } from "../shared/tabs.js";
+import type { AuthAnswer, AuthChallenge } from "../main/auth.js";
 
 const api = {
   /** Drives title-bar padding: the caption buttons sit on the left on macOS and
@@ -32,6 +33,19 @@ const api = {
   llm: {
     review: (ctx: CaptureContext, input: ReviewInput): Promise<Result<Review>> =>
       ipcRenderer.invoke(IPC.llmReview, ctx, input),
+  },
+  /** HTTP Basic/Digest and proxy authentication for the page under test. */
+  auth: {
+    /** Main pushes a challenge; the cockpit shows a prompt. */
+    onRequest: (cb: (c: AuthChallenge) => void): (() => void) => {
+      const listener = (_e: unknown, c: AuthChallenge) => cb(c);
+      ipcRenderer.on(IPC.authRequest, listener);
+      return () => { ipcRenderer.removeListener(IPC.authRequest, listener); };
+    },
+    respond: (answer: AuthAnswer): Promise<Result<void>> =>
+      ipcRenderer.invoke(IPC.authRespond, answer),
+    savedCount: (): Promise<number> => ipcRenderer.invoke(IPC.authCount),
+    forgetAll: (): Promise<Result<void>> => ipcRenderer.invoke(IPC.authForget),
   },
   /** Per-project tabs and bookmarks, so a project reopens where it was left. */
   workspace: {

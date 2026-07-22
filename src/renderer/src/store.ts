@@ -4,6 +4,7 @@ import type {
 } from "../../shared/types.js";
 import { DEFAULT_SETTINGS } from "../../shared/types.js";
 import type { Review } from "../../main/llm.js";
+import type { AuthChallenge } from "../../main/auth.js";
 import type { AnnotateMode } from "./guest.js";
 import { FIT } from "./devices.js";
 import {
@@ -69,6 +70,9 @@ export interface State {
   aiReview: Review | null;
   aiAnswers: Record<string, string>;
 
+  /** An HTTP auth challenge awaiting the tester. */
+  authChallenge: AuthChallenge | null;
+
   setSettings: (s: AppSettings) => void;
   openSettings: (open: boolean) => void;
   setProject: (key: string) => void;
@@ -104,6 +108,7 @@ export interface State {
   setTicket: (t: Ticket) => void;
   setReview: (r: Review | null) => void;
   setAnswer: (id: string, answer: string) => void;
+  setAuthChallenge: (c: AuthChallenge | null) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -140,6 +145,7 @@ export const useStore = create<State>((set) => ({
   ticket: null,
   aiReview: null,
   aiAnswers: {},
+  authChallenge: null,
 
   setSettings: (settings) => set({ settings, ready: true }),
   openSettings: (settingsOpen) => set({ settingsOpen }),
@@ -200,4 +206,5 @@ export const useStore = create<State>((set) => ({
   setTicket: (ticket) => set({ ticket }),
   setReview: (aiReview) => set({ aiReview }),
   setAnswer: (id, answer) => set((s) => ({ aiAnswers: { ...s.aiAnswers, [id]: answer } })),
+  setAuthChallenge: (authChallenge) => set({ authChallenge }),
 }));

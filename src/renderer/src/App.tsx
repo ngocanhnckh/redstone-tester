@@ -4,6 +4,7 @@ import Browser from "./Browser.js";
 import Composer from "./Composer.js";
 import Settings from "./Settings.js";
 import ProjectPicker from "./ProjectPicker.js";
+import AuthPrompt from "./AuthPrompt.js";
 import { Icon } from "./Icons.js";
 import { useStore } from "./store.js";
 import { restore, snapshot } from "../../shared/tabs.js";
@@ -13,8 +14,12 @@ export default function App(): JSX.Element {
     ready, settings, mode, capture, project, recording, hydrated,
     tabs, activeId, bookmarks,
     openSettings, setSettings, setMode, setProject, openProjectPicker, setRecording,
-    hydrate, openTab, shutTab,
+    hydrate, openTab, shutTab, setAuthChallenge,
   } = useStore();
+
+  // A page can challenge for credentials at any moment, including during the
+  // very first restore, so this listener is attached before anything else runs.
+  useEffect(() => window.tester.auth.onRequest(setAuthChallenge), [setAuthChallenge]);
 
   useEffect(() => {
     void window.tester.settings.get().then((s) => {
@@ -170,6 +175,8 @@ export default function App(): JSX.Element {
 
       <ProjectPicker />
       <Settings />
+      {/* Above everything: a challenge blocks the page load until answered. */}
+      <AuthPrompt />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { jiraConfigured, loadSettings, saveSettings } from "./settings.js";
 import * as jira from "./jira.js";
 import { review, ReviewInput } from "./llm.js";
 import { getWorkspace, setWorkspace } from "./workspace.js";
+import { AuthAnswer, answerAuth, forgetAll, registerAuthHandler, savedCount } from "./auth.js";
 import type { Workspace } from "../shared/tabs.js";
 import { IPC } from "../shared/ipc.js";
 
@@ -81,6 +82,9 @@ app.whenReady().then(() => {
   session.fromPartition("persist:rtt").setUserAgent(chromeUa);
 
   registerIpc();
+  // Must be installed before any window exists: a restored tab can challenge
+  // for credentials during its very first load.
+  registerAuthHandler();
   createWindow();
 
   app.on("activate", () => {
@@ -132,6 +136,16 @@ function registerIpc(): void {
 
   handle(IPC.windowNew, async (project?: string) => {
     createWindow(project);
+    return { ok: true, data: undefined } satisfies Result<undefined>;
+  });
+
+  handle(IPC.authRespond, async (answer: AuthAnswer) => {
+    await answerAuth(answer);
+    return { ok: true, data: undefined } satisfies Result<undefined>;
+  });
+  handle(IPC.authCount, async () => await savedCount());
+  handle(IPC.authForget, async () => {
+    await forgetAll();
     return { ok: true, data: undefined } satisfies Result<undefined>;
   });
 
