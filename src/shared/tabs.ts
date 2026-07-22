@@ -26,7 +26,22 @@ export interface Workspace {
   /** Index into `tabs` of the tab that was focused. */
   active: number;
   bookmarks: Bookmark[];
+  /** The queue sidebar's filter. Per project, because "Ready for QA" is one
+   *  project's wording and another's workflow may not have it at all. */
+  queue?: QueuePrefs;
 }
+
+export interface QueuePrefs {
+  /** Status names to show. Empty means the whole sprint. */
+  statuses: string[];
+  /** Limit to the open sprint rather than the whole project. */
+  sprintOnly: boolean;
+  /** Whether the sidebar was open — a tester who works from the queue should
+   *  find it open again next time. */
+  open: boolean;
+}
+
+export const DEFAULT_QUEUE: QueuePrefs = { statuses: [], sprintOnly: true, open: false };
 
 export interface Bookmark {
   url: string;
@@ -34,7 +49,9 @@ export interface Bookmark {
   title: string;
 }
 
-export const EMPTY_WORKSPACE: Workspace = { tabs: [], active: 0, bookmarks: [] };
+export const EMPTY_WORKSPACE: Workspace = {
+  tabs: [], active: 0, bookmarks: [], queue: { ...DEFAULT_QUEUE },
+};
 
 let counter = 0;
 /** Ids only need to be unique within a window's lifetime — they key React
@@ -101,11 +118,17 @@ export function restore(ws: Workspace, fallback: string): TabState {
 }
 
 /** What to persist for the current tab strip. */
-export function snapshot(state: TabState, bookmarks: Bookmark[]): Workspace {
+export function snapshot(state: TabState, bookmarks: Bookmark[], queue?: QueuePrefs): Workspace {
   return {
     tabs: state.tabs.map((t) => t.url).filter(Boolean),
     active: Math.max(0, state.tabs.findIndex((t) => t.id === state.activeId)),
     bookmarks,
+    // Deep enough to matter: a spread alone would share the `statuses` array
+    // with live state, so a later filter change would edit an already-saved
+    // session in place.
+    queue: queue
+      ? { ...queue, statuses: [...queue.statuses] }
+      : { ...DEFAULT_QUEUE, statuses: [...DEFAULT_QUEUE.statuses] },
   };
 }
 

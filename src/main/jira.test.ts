@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { filterUsers, rankAssignees } from "./jira.js";
+import {
+  filterUsers, flattenStatuses, isNoSprintError, jqlLiteral, queueJql, rankAssignees,
+} from "./jira.js";
 import type { JiraUser } from "../shared/types.js";
 
 const user = (id: string, displayName: string, email?: string): JiraUser =>
@@ -57,6 +59,92 @@ describe("rankAssignees", () => {
 
   it("returns nothing when there is nothing", () => {
     expect(rankAssignees([], ranked([]))).toEqual([]);
+  });
+});
+
+describe("jqlLiteral", () => {
+  it("quotes an ordinary status name", () => {
+    expect(jqlLiteral("Ready for QA")).toBe('"Ready for QA"');
+  });
+
+  it("escapes a quote, which would otherwise end the literal early", () => {
+    // A status literally named  Won"t Fix  is legal in Jira. Unescaped, the
+    // query would not merely fail — it would run and match the wrong thing.
+    expect(jqlLiteral('Won"t Fix')).toBe('"Won\\"t Fix"');
+  });
+
+  it("escapes backslashes before quotes, so an escape cannot be forged", () => {
+    expect(jqlLiteral("a\\b")).toBe('"a\\\\b"');
+    expect(jqlLiteral('a\\"b')).toBe('"a\\\\\\"b"');
+  });
+});
+
+describe("queueJql", () => {
+  it("scopes to the project and the open sprint, newest first", () => {
+    expect(queueJql("RTT", ["Ready for QA"], true)).toBe(
+      'project = "RTT" AND sprint in openSprints() AND status = "Ready for QA" ORDER BY updated DESC',
+    );
+  });
+
+  it("uses `in` for several statuses", () => {
+    expect(queueJql("RTT", ["Ready for QA", "In Review"], true)).toContain(
+      'status in ("Ready for QA", "In Review")',
+    );
+  });
+
+  it("drops the status clause entirely when nothing is selected", () => {
+    // "No filter" must mean the whole sprint, not `status in ()` — which is a
+    // syntax error, and would present as an empty queue.
+    const jql = queueJql("RTT", [], true);
+    expect(jql).not.toContain("status");
+    expect(jql).toBe('project = "RTT" AND sprint in openSprints() ORDER BY updated DESC');
+  });
+
+  it("drops the sprint clause when the tester asked for the whole project", () => {
+    expect(queueJql("RTT", ["Done"], false)).toBe(
+      'project = "RTT" AND status = "Done" ORDER BY updated DESC',
+    );
+  });
+
+  it("ignores blank status entries rather than emitting an empty literal", () => {
+    expect(queueJql("RTT", ["  ", "Open"], false)).toContain('status = "Open"');
+  });
+
+  it("escapes the project key too — it is interpolated the same way", () => {
+    expect(queueJql('A"B', [], false)).toContain('project = "A\\"B"');
+  });
+});
+
+describe("isNoSprintError", () => {
+  it("recognises a Jira without the sprint field", () => {
+    expect(isNoSprintError(
+      "400 — Field 'sprint' does not exist or you do not have permission to view it.",
+    )).toBe(true);
+  });
+
+  it("does not treat an unrelated failure as a missing sprint", () => {
+    // Retrying these unscoped would replace a real error with a wrong-scope
+    // list, which is worse than the error.
+    expect(isNoSprintError("401 Unauthorized")).toBe(false);
+    expect(isNoSprintError("400 — The value 'Ready for QA' does not exist for the field 'status'."))
+      .toBe(false);
+  });
+});
+
+describe("flattenStatuses", () => {
+  it("collapses the per-issue-type grouping Jira returns into one list", () => {
+    const out = flattenStatuses([
+      { statuses: [{ id: "1", name: "Open", statusCategory: { key: "new" } }, { id: "3", name: "Done", statusCategory: { key: "done" } }] },
+      { statuses: [{ id: "1", name: "Open", statusCategory: { key: "new" } }, { id: "2", name: "Ready for QA", statusCategory: { key: "indeterminate" } }] },
+    ]);
+    expect(out.map((s) => s.name)).toEqual(["Open", "Done", "Ready for QA"]);
+    expect(out[2].category).toBe("indeterminate");
+  });
+
+  it("survives a project with no statuses, or a malformed payload", () => {
+    expect(flattenStatuses([])).toEqual([]);
+    expect(flattenStatuses([{}])).toEqual([]);
+    expect(flattenStatuses([{ statuses: [{ id: "1" }] }])).toEqual([]);
   });
 });
 

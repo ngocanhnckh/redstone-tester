@@ -6,7 +6,7 @@
 import { app } from "electron";
 import { promises as fs } from "node:fs";
 import { dirname, join } from "node:path";
-import { EMPTY_WORKSPACE, Workspace } from "../shared/tabs.js";
+import { DEFAULT_QUEUE, EMPTY_WORKSPACE, QueuePrefs, Workspace } from "../shared/tabs.js";
 
 /** Windows with no Jira project still get a remembered session, under this key. */
 export const NO_PROJECT = "__local__";
@@ -28,6 +28,20 @@ function sane(w: unknown): Workspace {
           Boolean(b) && typeof (b as { url?: unknown }).url === "string")
         .map((b) => ({ url: b.url, title: typeof b.title === "string" ? b.title : b.url }))
       : [],
+    queue: saneQueue(o.queue),
+  };
+}
+
+/** Workspaces written before the queue existed have no `queue` key at all, so
+ *  every field falls back rather than the object as a whole. */
+function saneQueue(q: unknown): QueuePrefs {
+  const o = (q ?? {}) as Partial<QueuePrefs>;
+  return {
+    statuses: Array.isArray(o.statuses)
+      ? o.statuses.filter((s): s is string => typeof s === "string" && Boolean(s.trim()))
+      : [...DEFAULT_QUEUE.statuses],
+    sprintOnly: typeof o.sprintOnly === "boolean" ? o.sprintOnly : DEFAULT_QUEUE.sprintOnly,
+    open: typeof o.open === "boolean" ? o.open : DEFAULT_QUEUE.open,
   };
 }
 

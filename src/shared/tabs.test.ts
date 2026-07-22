@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_WORKSPACE, addBookmark, addTab, closeTab, isBookmarked, newTab, patchTab,
-  removeBookmark, restore, snapshot, tabLabel,
+  DEFAULT_QUEUE, removeBookmark, restore, snapshot, tabLabel,
 } from "./tabs.js";
 import type { TabState } from "./tabs.js";
 
@@ -110,6 +110,27 @@ describe("snapshot resilience", () => {
   it("keeps every tab that has a URL", () => {
     const s = state(["https://a.test", "https://b.test", "https://c.test"], 2);
     expect(snapshot(s, []).tabs).toHaveLength(3);
+  });
+});
+
+describe("queue preferences", () => {
+  it("persists the filter with the rest of the project's session", () => {
+    const s = state(["https://a.test"], 0);
+    const ws = snapshot(s, [], { statuses: ["Ready for QA"], sprintOnly: true, open: true });
+    expect(ws.queue).toEqual({ statuses: ["Ready for QA"], sprintOnly: true, open: true });
+  });
+
+  it("falls back to a closed, unfiltered queue when none is supplied", () => {
+    // Sessions saved before the queue existed have no prefs at all; the sidebar
+    // must not decide to open itself in a project that never asked for it.
+    expect(snapshot(state(["https://a.test"], 0), []).queue).toEqual(DEFAULT_QUEUE);
+  });
+
+  it("copies rather than aliases, so later edits cannot mutate a saved session", () => {
+    const prefs = { statuses: ["Open"], sprintOnly: false, open: true };
+    const ws = snapshot(state(["https://a.test"], 0), [], prefs);
+    prefs.statuses.push("Done");
+    expect(ws.queue?.statuses).toEqual(["Open"]);
   });
 });
 

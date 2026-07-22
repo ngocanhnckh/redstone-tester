@@ -131,6 +131,20 @@ function registerIpc(): void {
     await jira.listBoards(await loadSettings(), project));
   handle(IPC.jiraCreate, async (opts: jira.CreateOpts) => await jira.createIssue(await loadSettings(), opts));
 
+  handle(IPC.jiraStatuses, async (project?: string) =>
+    await jira.listStatuses(await loadSettings(), project));
+  handle(IPC.jiraQueue, async (opts: jira.QueueOpts) =>
+    await jira.listQueue(await loadSettings(), opts));
+  handle(IPC.jiraIssue, async (key: string) => await jira.getIssue(await loadSettings(), key));
+  handle(IPC.jiraTransitions, async (key: string) =>
+    await jira.listTransitions(await loadSettings(), key));
+  handle(IPC.jiraTransition, async (key: string, transitionId: string) =>
+    await jira.transitionIssue(await loadSettings(), key, transitionId));
+  handle(IPC.jiraComment, async (key: string, body: string) =>
+    await jira.addComment(await loadSettings(), key, body));
+  handle(IPC.jiraAttachment, async (url: string) =>
+    await jira.fetchAttachment(await loadSettings(), url));
+
   handle(IPC.llmReview, async (ctx: CaptureContext, input: ReviewInput) =>
     await review(await loadSettings(), ctx, input));
 

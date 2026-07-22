@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markdownToJira } from "./jiraMarkup";
+import { jiraToPlain, markdownToJira } from "./jiraMarkup";
 
 describe("markdownToJira", () => {
   it("empty / whitespace → empty string", () => {
@@ -72,5 +72,56 @@ describe("markdownToJira", () => {
     expect(markdownToJira(md)).toBe(
       ["h1. Plan", "", "Ship the *login* flow and fix {{authGuard}}.", "", "* step one", "* step [two|https://j/RCW-2]"].join("\n"),
     );
+  });
+});
+
+describe("jiraToPlain", () => {
+  it("turns a heading into a plain line, not 'h3. Heading'", () => {
+    expect(jiraToPlain("h3. Steps to reproduce")).toBe("Steps to reproduce");
+  });
+
+  it("renders lists as bullets regardless of nesting depth", () => {
+    expect(jiraToPlain("* one\n** two\n# three")).toBe("• one\n• two\n• three");
+  });
+
+  it("drops emphasis markers", () => {
+    expect(jiraToPlain("this is *bold* and _italic_ and +inserted+"))
+      .toBe("this is bold and italic and inserted");
+  });
+
+  it("leaves arithmetic and identifiers alone", () => {
+    // A naive strip would eat the stars in 2*3*4 and the underscores in a
+    // filename, which is exactly the text a bug report is full of.
+    expect(jiraToPlain("2*3*4 = 24")).toBe("2*3*4 = 24");
+    expect(jiraToPlain("see file_name_1.png")).toBe("see file_name_1.png");
+  });
+
+  it("names an attached image instead of showing the macro", () => {
+    expect(jiraToPlain("Before !shot.png|thumbnail! after")).toBe("Before [shot.png] after");
+  });
+
+  it("keeps both halves of a link", () => {
+    expect(jiraToPlain("see [the page|https://x.test/a] now"))
+      .toBe("see the page (https://x.test/a) now");
+  });
+
+  it("preserves a code block byte for byte", () => {
+    // A stack trace is evidence. Anything that looks like markup inside it —
+    // *pointers, _names, [brackets] — must survive untouched.
+    const wiki = "before\n{code}\nat *foo* _bar_ [baz]\n{code}\nafter";
+    expect(jiraToPlain(wiki)).toBe("before\nat *foo* _bar_ [baz]\nafter");
+  });
+
+  it("preserves noformat blocks the same way", () => {
+    expect(jiraToPlain("{noformat}\nh1. not a heading\n{noformat}")).toBe("h1. not a heading");
+  });
+
+  it("strips inline code delimiters", () => {
+    expect(jiraToPlain("run {{npm test}} first")).toBe("run npm test first");
+  });
+
+  it("returns an empty string for empty input rather than throwing", () => {
+    expect(jiraToPlain("")).toBe("");
+    expect(jiraToPlain("   ")).toBe("");
   });
 });

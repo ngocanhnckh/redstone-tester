@@ -7,14 +7,15 @@ import ProjectPicker from "./ProjectPicker.js";
 import AuthPrompt from "./AuthPrompt.js";
 import { Icon } from "./Icons.js";
 import { useStore } from "./store.js";
-import { restore, snapshot } from "../../shared/tabs.js";
+import Queue from "./Queue.js";
+import { DEFAULT_QUEUE, restore, snapshot } from "../../shared/tabs.js";
 
 export default function App(): JSX.Element {
   const {
     ready, settings, mode, capture, project, recording, hydrated,
-    tabs, activeId, bookmarks,
+    tabs, activeId, bookmarks, queue,
     openSettings, setSettings, setMode, setProject, openProjectPicker, setRecording,
-    hydrate, openTab, shutTab, setAuthChallenge,
+    hydrate, openTab, shutTab, setAuthChallenge, setQueue,
   } = useStore();
 
   // A page can challenge for credentials at any moment, including during the
@@ -42,7 +43,7 @@ export default function App(): JSX.Element {
     let cancelled = false;
     void window.tester.workspace.get(project).then((ws) => {
       if (cancelled) return;
-      hydrate(restore(ws, settings.homeUrl), ws.bookmarks);
+      hydrate(restore(ws, settings.homeUrl), ws.bookmarks, ws.queue ?? { ...DEFAULT_QUEUE });
     });
     return () => { cancelled = true; };
   }, [ready, hydrated, project, settings.homeUrl, hydrate]);
@@ -54,23 +55,23 @@ export default function App(): JSX.Element {
     if (!hydrated) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      void window.tester.workspace.set(project, snapshot({ tabs, activeId }, bookmarks));
+      void window.tester.workspace.set(project, snapshot({ tabs, activeId }, bookmarks, queue));
     }, 600);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [hydrated, project, tabs, activeId, bookmarks]);
+  }, [hydrated, project, tabs, activeId, bookmarks, queue]);
 
   // Switching project must not drop whatever the outgoing one had open: the
   // debounced save may not have fired yet, and `hydrated: false` stops it firing
   // at all. Flush the previous project's workspace the moment the key changes.
-  const prev = useRef({ project, tabs, activeId, bookmarks, hydrated });
+  const prev = useRef({ project, tabs, activeId, bookmarks, queue, hydrated });
   useEffect(() => {
     const p = prev.current;
     if (p.hydrated && p.project !== project) {
       void window.tester.workspace.set(
-        p.project, snapshot({ tabs: p.tabs, activeId: p.activeId }, p.bookmarks),
+        p.project, snapshot({ tabs: p.tabs, activeId: p.activeId }, p.bookmarks, p.queue),
       );
     }
-    prev.current = { project, tabs, activeId, bookmarks, hydrated };
+    prev.current = { project, tabs, activeId, bookmarks, queue, hydrated };
   });
 
   useEffect(() => {
@@ -80,6 +81,10 @@ export default function App(): JSX.Element {
       if (meta && e.shiftKey && e.key.toLowerCase() === "r") { e.preventDefault(); setMode(mode === "region" ? "off" : "region"); }
       if (meta && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); setRecording(!recording); }
       if (meta && e.shiftKey && e.key.toLowerCase() === "n") { e.preventDefault(); void window.tester.newWindow(); }
+      if (meta && e.shiftKey && e.key.toLowerCase() === "q") {
+        e.preventDefault();
+        setQueue({ open: !useStore.getState().queue.open });
+      }
       if (meta && e.key.toLowerCase() === "t" && !e.shiftKey) {
         e.preventDefault();
         openTab(useStore.getState().settings.homeUrl);
@@ -94,7 +99,7 @@ export default function App(): JSX.Element {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, recording, setMode, setRecording, openSettings, openTab, shutTab]);
+  }, [mode, recording, setMode, setRecording, openSettings, openTab, shutTab, setQueue]);
 
   const jiraOn = Boolean(settings.jira.endpoint && settings.jira.token);
   const aiOn = Boolean(settings.llm.endpoint && settings.llm.model);
@@ -128,6 +133,13 @@ export default function App(): JSX.Element {
           <div className="no-drag flex items-center gap-1.5">
             {jiraOn ? (
               <>
+                <button
+                  className={`btn !py-1 !text-[11.5px] ${queue.open ? "btn--on" : "btn--ghost"}`}
+                  onClick={() => setQueue({ open: !queue.open })}
+                  title="Issues waiting on you in this project (⌘⇧Q)"
+                >
+                  <Icon name="queue" size={12} /> Queue
+                </button>
                 {/* The project this window files into — always visible, because
                     two windows on two projects look otherwise identical. */}
                 <button
@@ -167,8 +179,13 @@ export default function App(): JSX.Element {
           </div>
         </div>
 
-        <div className="relative min-h-0 flex-1">
-          {ready && hydrated && <Browser />}
+        {/* Queue beside the browser, not over it: a tester reads the ticket and
+            drives the page at the same time, so neither may hide the other. */}
+        <div className="relative flex min-h-0 flex-1">
+          <div className="relative min-h-0 min-w-0 flex-1">
+            {ready && hydrated && <Browser />}
+          </div>
+          {ready && hydrated && jiraOn && queue.open && <Queue />}
           {capture && <Composer />}
         </div>
       </div>

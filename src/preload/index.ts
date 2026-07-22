@@ -5,9 +5,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc.js";
 import type {
-  AppSettings, CaptureContext, CreatedIssue, JiraBoard, JiraProject, JiraUser, Result,
+  AppSettings, CaptureContext, CreatedIssue, JiraBoard, JiraComment, JiraIssueDetail,
+  JiraProject, JiraStatus, JiraTransition, JiraUser, Result,
 } from "../shared/types.js";
-import type { CreateOpts } from "../main/jira.js";
+import type { CreateOpts, Queue, QueueOpts } from "../main/jira.js";
 import type { Review, ReviewInput } from "../main/llm.js";
 import type { Workspace } from "../shared/tabs.js";
 import type { AuthAnswer, AuthChallenge } from "../main/auth.js";
@@ -29,6 +30,22 @@ const api = {
     boards: (project?: string): Promise<Result<JiraBoard[]>> =>
       ipcRenderer.invoke(IPC.jiraBoards, project),
     create: (opts: CreateOpts): Promise<Result<CreatedIssue>> => ipcRenderer.invoke(IPC.jiraCreate, opts),
+
+    /** The queue sidebar: what is sitting at a given status in this sprint, and
+     *  everything needed to act on one without leaving the app. */
+    statuses: (project?: string): Promise<Result<JiraStatus[]>> =>
+      ipcRenderer.invoke(IPC.jiraStatuses, project),
+    queue: (opts: QueueOpts): Promise<Result<Queue>> => ipcRenderer.invoke(IPC.jiraQueue, opts),
+    issue: (key: string): Promise<Result<JiraIssueDetail>> => ipcRenderer.invoke(IPC.jiraIssue, key),
+    transitions: (key: string): Promise<Result<JiraTransition[]>> =>
+      ipcRenderer.invoke(IPC.jiraTransitions, key),
+    transition: (key: string, transitionId: string): Promise<Result<void>> =>
+      ipcRenderer.invoke(IPC.jiraTransition, key, transitionId),
+    comment: (key: string, body: string): Promise<Result<JiraComment>> =>
+      ipcRenderer.invoke(IPC.jiraComment, key, body),
+    /** Attachments need the Jira credentials, which live in main — so the bytes
+     *  come back as a data: URL the renderer can show directly. */
+    attachment: (url: string): Promise<Result<string>> => ipcRenderer.invoke(IPC.jiraAttachment, url),
   },
   llm: {
     review: (ctx: CaptureContext, input: ReviewInput): Promise<Result<Review>> =>

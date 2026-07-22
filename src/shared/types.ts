@@ -183,6 +183,71 @@ export interface JiraProject { key: string; name: string }
 export interface JiraBoard { id: number; name: string }
 export interface JiraSprint { id: number; name: string; state: string }
 
+/** A workflow status as the project defines it. `category` is Jira's own
+ *  grouping (`new` / `indeterminate` / `done`), used only to colour the pill. */
+export interface JiraStatus {
+  id: string;
+  name: string;
+  category?: string;
+}
+
+/** One row in the tester's queue. Deliberately flat: the sidebar shows a list,
+ *  and pulling the whole issue for every row would be a request per row. */
+export interface JiraIssue {
+  key: string;
+  summary: string;
+  status: string;
+  statusCategory?: string;
+  issueType?: string;
+  priority?: string;
+  assignee?: JiraUser;
+  reporter?: JiraUser;
+  /** ISO timestamp of the last change — what the queue is ordered by. */
+  updated?: string;
+  /** Browser URL, resolved here so the renderer never rebuilds Jira URLs. */
+  url: string;
+}
+
+/** Everything the detail pane shows, fetched only when an issue is opened. */
+export interface JiraIssueDetail extends JiraIssue {
+  /** Raw Jira wiki markup. Rendered readably rather than as source. */
+  description: string;
+  labels: string[];
+  created?: string;
+  comments: JiraComment[];
+  attachments: JiraAttachment[];
+}
+
+export interface JiraComment {
+  id: string;
+  author: string;
+  authorAvatar?: string;
+  body: string;
+  created: string;
+}
+
+export interface JiraAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  created?: string;
+  /** Authenticated content URL. Not usable directly by the renderer — it is
+   *  fetched through the main process, which holds the credentials. */
+  content: string;
+  thumbnail?: string;
+}
+
+/** A move the workflow permits from the issue's CURRENT status. Which ones exist
+ *  depends on the issue, so they are fetched per issue rather than guessed. */
+export interface JiraTransition {
+  id: string;
+  name: string;
+  /** Status the issue lands in. This, not `name`, is what the tester means. */
+  to: string;
+  toCategory?: string;
+}
+
 export interface CreatedIssue { key: string; url: string }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };

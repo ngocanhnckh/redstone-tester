@@ -8,7 +8,8 @@ import type { AuthChallenge } from "../../main/auth.js";
 import type { AnnotateMode } from "./guest.js";
 import { FIT } from "./devices.js";
 import {
-  Bookmark, Tab, TabState, addBookmark, addTab, closeTab, patchTab, removeBookmark,
+  Bookmark, DEFAULT_QUEUE, QueuePrefs, Tab, TabState,
+  addBookmark, addTab, closeTab, patchTab, removeBookmark,
 } from "../../shared/tabs.js";
 
 /** How many recorded actions we keep. Enough for a long flow, bounded so a page
@@ -73,6 +74,11 @@ export interface State {
   /** An HTTP auth challenge awaiting the tester. */
   authChallenge: AuthChallenge | null;
 
+  /** The queue sidebar's filter, restored with the project's workspace. */
+  queue: QueuePrefs;
+  /** Issue key open in the detail pane, or "" for the list. */
+  openIssue: string;
+
   setSettings: (s: AppSettings) => void;
   openSettings: (open: boolean) => void;
   setProject: (key: string) => void;
@@ -83,7 +89,9 @@ export interface State {
   shutTab: (id: string) => void;
   focusTab: (id: string) => void;
   updateTab: (id: string, patch: Partial<Tab>) => void;
-  hydrate: (state: TabState, bookmarks: Bookmark[]) => void;
+  hydrate: (state: TabState, bookmarks: Bookmark[], queue: QueuePrefs) => void;
+  setQueue: (patch: Partial<QueuePrefs>) => void;
+  setOpenIssue: (key: string) => void;
   bookmark: (entry: Bookmark) => void;
   unbookmark: (url: string) => void;
   setDevice: (id: string) => void;
@@ -147,6 +155,9 @@ export const useStore = create<State>((set) => ({
   aiAnswers: {},
   authChallenge: null,
 
+  queue: { ...DEFAULT_QUEUE },
+  openIssue: "",
+
   setSettings: (settings) => set({ settings, ready: true }),
   openSettings: (settingsOpen) => set({ settingsOpen }),
   // Changing project swaps the whole workspace: its tabs and bookmarks are
@@ -164,7 +175,13 @@ export const useStore = create<State>((set) => ({
   }),
   focusTab: (activeId) => set({ activeId }),
   updateTab: (id, patch) => set((s) => patchTab({ tabs: s.tabs, activeId: s.activeId }, id, patch)),
-  hydrate: (state, bookmarks) => set({ tabs: state.tabs, activeId: state.activeId, bookmarks, hydrated: true }),
+  // Switching project swaps the queue with everything else, and closes whatever
+  // issue was open — it belongs to the project we just left.
+  hydrate: (state, bookmarks, queue) => set({
+    tabs: state.tabs, activeId: state.activeId, bookmarks, queue, openIssue: "", hydrated: true,
+  }),
+  setQueue: (patch) => set((s) => ({ queue: { ...s.queue, ...patch } })),
+  setOpenIssue: (openIssue) => set({ openIssue }),
   bookmark: (entry) => set((s) => ({ bookmarks: addBookmark(s.bookmarks, entry) })),
   unbookmark: (url) => set((s) => ({ bookmarks: removeBookmark(s.bookmarks, url) })),
   setDevice: (deviceId) => set({ deviceId }),
