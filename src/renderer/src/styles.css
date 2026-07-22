@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+/* =====================================================================
+   Redstone Tester — Warm Ink / Liquid Glass
+   Ported from the Redstone Cowork cockpit theme so the two apps read as
+   one family. Clay = the action · Amber = waiting on you.
+   ===================================================================== */
+
+@font-face { font-family: "Instrument Serif"; src: local("Instrument Serif"); font-display: swap; }
+
+:root {
+  --primary: 229 77 46;        /* clay */
+  --primary-soft: 240 110 80;
+  --accent: 226 169 91;        /* amber */
+  --app-bg: #15110D;
+  --app-panel: #1E1813;
+  --app-elev: #2A2219;
+  --border: rgba(243, 238, 227, 0.10);
+  --border-strong: rgba(243, 238, 227, 0.20);
+  --text: #F4F1E9;
+  --text-soft: #CFC6B6;
+  --text-faint: #9B9182;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+::selection { background: rgb(var(--primary)); color: #fff; }
+code, .mono { font-family: var(--font-mono); }
+
+/* thin, unobtrusive scrollbars */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(243,238,227,.13); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(243,238,227,.24); background-clip: padding-box; }
+
+/* ── atmosphere ─────────────────────────────────────────────────────── */
+.atmosphere { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.blob { position: absolute; border-radius: 999px; filter: blur(90px); mix-blend-mode: screen; will-change: transform; }
+.blob--a { width: 44vw; height: 44vw; left: 52%; top: -16%; background: radial-gradient(circle, rgb(var(--primary-soft) / .45), transparent 70%); animation: floatA 26s ease-in-out infinite; }
+.blob--b { width: 36vw; height: 36vw; left: 68%; top: 44%; background: radial-gradient(circle, rgb(var(--primary) / .38), transparent 70%); animation: floatB 31s ease-in-out infinite; }
+.blob--c { width: 30vw; height: 30vw; left: 2%; top: 52%; background: radial-gradient(circle, rgb(var(--accent) / .28), transparent 70%); animation: floatC 35s ease-in-out infinite; }
+@keyframes floatA { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(-10vw,7vh) scale(1.12); } 66% { transform: translate(7vw,-6vh) scale(.94); } }
+@keyframes floatB { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-13vw,9vh) scale(1.16); } }
+@keyframes floatC { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(11vw,-10vh) scale(.88); } }
+
+/* ── glass material ─────────────────────────────────────────────────── */
+.glass-surface {
+  background: color-mix(in srgb, var(--app-panel) 62%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .10), inset 0 0 0 1px rgb(255 255 255 / .03);
+  border: 1px solid var(--border);
+}
+.glass-inset {
+  background: color-mix(in srgb, var(--app-elev) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .07);
+  border: 1px solid var(--border);
+  transition: background-color .18s, border-color .18s, transform .18s;
+}
+.glass-inset:hover { background: color-mix(in srgb, var(--app-elev) 68%, transparent); }
+
+/* ── buttons ────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border-radius: 999px; padding: 8px 15px; font-size: 12.5px; font-weight: 500;
+  border: 1px solid var(--border); background: rgba(255,255,255,.045); color: var(--text);
+  cursor: pointer; transition: .16s; white-space: nowrap; user-select: none;
+}
+.btn:hover:not(:disabled) { background: rgba(255,255,255,.09); border-color: var(--border-strong); }
+.btn:disabled { opacity: .42; cursor: not-allowed; }
+.btn--clay {
+  background: rgb(var(--primary) / .34);
+  border-color: rgb(var(--primary-soft) / .55);
+  color: #fff; font-weight: 600;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .22), 0 12px 30px -14px rgb(var(--primary) / .8);
+}
+.btn--clay:hover:not(:disabled) { background: rgb(var(--primary-soft) / .48); border-color: rgb(var(--accent) / .65); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-soft); }
+.btn--ghost:hover:not(:disabled) { background: rgba(255,255,255,.07); color: var(--text); }
+.btn--icon { padding: 0; width: 30px; height: 30px; border-radius: 9px; }
+.btn--on { background: rgb(var(--primary) / .3); border-color: rgb(var(--primary-soft) / .6); color: #fff; }
+
+/* ── type ───────────────────────────────────────────────────────────── */
+.display { font-family: var(--font-display); font-weight: 400; letter-spacing: -.02em; line-height: 1.05; }
+.kicker { font-family: var(--font-mono); font-size: .63rem; letter-spacing: .26em; text-transform: uppercase; color: rgb(var(--primary-soft)); }
+.soft { color: var(--text-soft); }
+.faint { color: var(--text-faint); }
+
+/* ── form controls ──────────────────────────────────────────────────── */
+.field {
+  width: 100%; padding: 9px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: rgba(255,255,255,.035); color: var(--text);
+  font-size: 13px; outline: none; caret-color: rgb(var(--primary-soft));
+  font-family: var(--font-body); transition: border-color .16s, background-color .16s;
+}
+.field:focus { border-color: rgb(var(--primary-soft) / .7); background: rgba(255,255,255,.06); }
+.field::placeholder { color: var(--text-faint); }
+textarea.field { resize: vertical; line-height: 1.55; }
+select.field { appearance: none; cursor: pointer; background-image: none; }
+select.field option { background: var(--app-panel); color: var(--text); }
+
+.label {
+  display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px;
+}
+
+/* ── chips & badges ─────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; border: 1px solid var(--border); background: rgba(255,255,255,.05); color: var(--text-soft);
+}
+.chip--live { border-color: rgb(var(--primary-soft) / .5); color: rgb(var(--primary-soft)); background: rgb(var(--primary) / .12); }
+.chip--warn { border-color: rgb(var(--accent) / .5); color: rgb(var(--accent)); background: rgb(var(--accent) / .1); }
+
+.dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .9s linear infinite; display: inline-flex; }
+
+/* ── loading ────────────────────────────────────────────────────────────
+   An indeterminate bar: a page load has no meaningful percentage (the guest
+   reports start and stop, nothing between), so the motion says "working"
+   without claiming progress it doesn't know. */
+@keyframes sweep {
+  0%   { left: -35%; width: 35%; }
+  50%  { left: 40%;  width: 45%; }
+  100% { left: 100%; width: 35%; }
+}
+.loadbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  overflow: hidden; pointer-events: none; z-index: 5;
+  background: rgb(var(--primary) / .12);
+}
+.loadbar::after {
+  content: ""; position: absolute; top: 0; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgb(var(--primary-soft)) 35%,
+    rgb(var(--accent)) 65%,
+    transparent);
+  animation: sweep 1.15s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+
+/* A brief veil so a half-painted page doesn't read as the finished one. */
+.loadveil {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  background: rgb(21 17 13 / .28);
+  animation: veilIn .18s ease-out both;
+}
+@keyframes veilIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Tab spinner — a ring rather than a pulsing dot, so "loading" and "active"
+   never look like the same state. */
+.tabspin {
+  width: 11px; height: 11px; border-radius: 999px;
+  border: 1.5px solid rgb(var(--primary-soft) / .3);
+  border-top-color: rgb(var(--primary-soft));
+  animation: spin .7s linear infinite;
+}
+
+/* Shimmer for the empty stage before the first page paints. */
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.02) 25%,
+    rgba(255,255,255,.06) 50%,
+    rgba(255,255,255,.02) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.rise { animation: riseIn .22s ease-out both; }
+
+/* ── drag region for the frameless title bar ────────────────────────── */
+.drag { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+/* ── the guest webview ──────────────────────────────────────────────── */
+webview { display: flex; width: 100%; height: 100%; background: #fff; }
+webview.crosshair { cursor: crosshair; }
