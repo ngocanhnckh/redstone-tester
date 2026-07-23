@@ -313,11 +313,67 @@ describe("marker substitution", () => {
   it("leaves no unsubstituted placeholder in either program", () => {
     // A string `.replace` only swaps the first match; a second placeholder would
     // ship as a literal and its messages would never reach the host.
-    for (const src of [annotateJs("element"), annotateJs("region"), recorderJs(), recorderJs("Tiếng Việt")]) {
+    for (const src of [annotateJs("element"), annotateJs("region", 0.5), recorderJs(), recorderJs("Tiếng Việt")]) {
       expect(src).not.toContain("__MARK__");
       expect(src).not.toContain("__MODE__");
       expect(src).not.toContain("__PHRASES__");
+      expect(src).not.toContain("__INVSCALE__");
     }
+  });
+
+  it("bakes in the inverse of the frame scale, rounded", () => {
+    // The dock counter-scales by this, so a 0.75 frame must inject 1.333, not
+    // 1.3333333333333333.
+    expect(annotateJs("element", 0.75)).toContain("Number(\"1.333\")");
+    // No scaling asked for → exactly 1, and the dock's transform stays "none".
+    expect(annotateJs("element", 1)).toContain("Number(\"1\")");
+  });
+
+  it("never divides by a zero scale", () => {
+    expect(annotateJs("element", 0)).toContain("Number(\"1\")");
+  });
+});
+
+describe("annotation dock scaling", () => {
+  it("counter-scales the dock, but not the markers, on a shrunk frame", () => {
+    document.body.innerHTML = `<p id="p">text</p>`;
+    const target = document.getElementById("p") as HTMLElement;
+    stubLayout(target);
+
+    // A half-size frame: the dock must scale UP by 2 to read at natural size.
+    run(annotateJs("element", 0.5));
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 20, clientY: 40 }));
+
+    const scaled = [...document.querySelectorAll<HTMLElement>("[data-rtt]")]
+      .filter((n) => /scale\(2\)/.test(n.style.transform));
+    // Exactly one element counter-scales — the dock. The outline and badge that
+    // track the clicked element must ride the frame's shrink so they stay
+    // aligned, so they must NOT carry an inverse transform.
+    expect(scaled).toHaveLength(1);
+  });
+
+  it("holds the dock at natural size when the frame is not scaled", () => {
+    run(annotateJs("element", 1));
+    const anyInverse = [...document.querySelectorAll<HTMLElement>("[data-rtt]")]
+      .some((n) => /scale\(/.test(n.style.transform));
+    expect(anyInverse).toBe(false);
+  });
+
+  it("live setScale re-pins the dock without re-injecting", () => {
+    run(annotateJs("element", 1));
+    const before = document.querySelectorAll("[data-rtt]").length;
+
+    const api = (window as unknown as { __rttA?: { setScale?: (s: number) => void } }).__rttA;
+    expect(typeof api?.setScale).toBe("function");
+    api!.setScale!(2);
+
+    const after = document.querySelectorAll("[data-rtt]").length;
+    // Same nodes — the overlay was updated in place, not torn down and rebuilt,
+    // so any pins the tester had made would survive a resize.
+    expect(after).toBe(before);
+    const scaled = [...document.querySelectorAll<HTMLElement>("[data-rtt]")]
+      .filter((n) => /scale\(2\)/.test(n.style.transform));
+    expect(scaled).toHaveLength(1);
   });
 });
 

@@ -447,6 +447,9 @@ export default function Browser(): JSX.Element {
                 mode={mode}
                 recording={recording}
                 lang={settings.llm.ticketLang}
+                // FIT never transforms the frame; every other device is drawn at
+                // `scale`, so that is what the overlay must counter for.
+                frameScale={isFit ? 1 : scale}
                 register={register}
                 onNavigate={onGuestNavigate}
                 onState={updateTab}

@@ -29,15 +29,24 @@ interface Props extends GuestEvents {
   recording: boolean;
   /** Language the recorder writes its steps in. */
   lang: string;
+  /** CSS-transform scale the device frame is drawn at (≤ 1). The overlay dock
+   *  counter-scales by its inverse so it stays readable on a shrunk device. */
+  frameScale: number;
   /** Hands the element to the parent so it can capture and inject on demand. */
   register: (id: string, el: WebviewEl | null) => void;
 }
 
 export default function GuestView({
-  tab, active, mode, recording, lang, register,
+  tab, active, mode, recording, lang, frameScale, register,
   onNavigate, onState, onConsole, onReadyChange, onInjectError,
 }: Props): JSX.Element {
   const ref = useRef<WebviewEl | null>(null);
+  // Read the latest scale inside the injection without depending on it: the
+  // annotate effect must NOT re-run when the frame resizes, or every window
+  // resize would tear the overlay down and lose the tester's pins. Scale changes
+  // instead flow through the live setScale path below.
+  const scaleRef = useRef(frameScale);
+  scaleRef.current = frameScale;
   const [guestReady, setGuestReady] = useState(false);
   const readyRef = useRef(false);
   /** `src` is set ONCE. It is an attribute, so re-rendering it with the tab's
@@ -171,8 +180,17 @@ export default function GuestView({
 
   useEffect(() => {
     if (!guestReady) return;
-    run(active && mode !== "off" ? annotateJs(mode as "element" | "region") : ANNOTATE_TEARDOWN_JS);
+    run(active && mode !== "off"
+      ? annotateJs(mode as "element" | "region", scaleRef.current)
+      : ANNOTATE_TEARDOWN_JS);
   }, [active, mode, guestReady, run]);
+
+  // Live scale updates — no re-injection, so the pins survive a resize/rotate.
+  // Guarded by `window.__rttA` so it is a no-op when the overlay is not up.
+  useEffect(() => {
+    if (!guestReady || !active || mode === "off") return;
+    run(`window.__rttA && window.__rttA.setScale(${frameScale > 0 ? 1 / frameScale : 1})`);
+  }, [frameScale, active, mode, guestReady, run]);
 
   return (
     <webview

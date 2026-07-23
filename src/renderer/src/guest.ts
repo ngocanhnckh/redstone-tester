@@ -60,6 +60,16 @@ const ANNOTATE = `(() => { try {
   var pins = [];
   var nextId = Number(window.__rttNextId || 1);
 
+  // The guest is rendered inside the cockpit's device frame, which the host
+  // shrinks with a CSS transform when the emulated device is wider than the
+  // stage (an iPad on a small window, any desktop preset). That shrink applies
+  // to everything the guest paints — including this dock, whose 12px text then
+  // renders at 7-8px and is unreadable. The markers must ride the shrink so they
+  // stay aligned to the page; the dock is chrome, so it counter-scales by the
+  // inverse to hold a natural, readable size. invScale is 1/frameScale, pushed
+  // in at injection and kept live by the host via __rttA.setScale.
+  var invScale = Number("__INVSCALE__") || 1;
+
   function mk(tag, css) {
     var n = document.createElement(tag);
     n.setAttribute("data-rtt", "1");
@@ -166,7 +176,13 @@ const ANNOTATE = `(() => { try {
     window.__rttNextId = nextId;
     try { delete window.__rttA; } catch (e) { window.__rttA = null; }
   }
-  window.__rttA = { mode: MODE, teardown: teardown, status: function () {}, count: function () { return pins.length; } };
+  window.__rttA = {
+    mode: MODE, teardown: teardown, status: function () {},
+    count: function () { return pins.length; },
+    // The frame scale changes after the overlay is up — resize the window,
+    // rotate the device, pick another preset — so the host updates it live.
+    setScale: function (s) { invScale = Number(s) || 1; place(); },
+  };
 
   onKey = function (e) {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); signal({ t: "exit" }); teardown(); }
@@ -194,17 +210,39 @@ const ANNOTATE = `(() => { try {
   var sendBtn = dock.querySelector("[data-send]");
   dock.querySelector("[data-cancel]").addEventListener("click", function () { signal({ t: "exit" }); teardown(); });
 
+  // Counter-scale the dock and keep it pinned bottom-right. Scaling grows the box
+  // toward the bottom-right, so anchoring by top/left with a top-left origin keeps
+  // the visible top-left corner exactly where we put it — which is what makes the
+  // drag maths below stay correct under a transform (getBoundingClientRect of a
+  // top-left-origin scaled box has the same top-left as its layout box). While
+  // corner-docked, we recompute the corner as the size or viewport changes; once
+  // the tester drags it, it holds wherever they left it.
+  var docked = true;
+  function place() {
+    dock.style.transformOrigin = "top left";
+    dock.style.transform = invScale === 1 ? "none" : "scale(" + invScale + ")";
+    if (!docked) return;
+    var w = dock.offsetWidth * invScale, h = dock.offsetHeight * invScale;
+    dock.style.right = "auto"; dock.style.bottom = "auto";
+    dock.style.left = Math.max(8, window.innerWidth - w - 16) + "px";
+    dock.style.top = Math.max(8, window.innerHeight - h - 16) + "px";
+  }
+
   // Drag by the header — the dock must never be the thing blocking the defect.
   var drag = null;
   function dragMove(e) {
     if (!drag) return;
-    var x = Math.max(0, Math.min(window.innerWidth - dock.offsetWidth, e.clientX - drag.dx));
-    var y = Math.max(0, Math.min(window.innerHeight - dock.offsetHeight, e.clientY - drag.dy));
+    // Clamp against the SCALED footprint, not the layout box, or the dock rides
+    // partly off-screen at the edges when counter-scaled up.
+    var w = dock.offsetWidth * invScale, h = dock.offsetHeight * invScale;
+    var x = Math.max(0, Math.min(window.innerWidth - w, e.clientX - drag.dx));
+    var y = Math.max(0, Math.min(window.innerHeight - h, e.clientY - drag.dy));
     dock.style.left = x + "px"; dock.style.top = y + "px";
   }
   function dragUp() { drag = null; document.removeEventListener("mousemove", dragMove, true); document.removeEventListener("mouseup", dragUp, true); }
   dock.querySelector("[data-drag]").addEventListener("mousedown", function (e) {
     e.preventDefault(); e.stopPropagation();
+    docked = false;
     var r = dock.getBoundingClientRect();
     dock.style.right = "auto"; dock.style.bottom = "auto";
     dock.style.left = r.left + "px"; dock.style.top = r.top + "px";
@@ -240,6 +278,9 @@ const ANNOTATE = `(() => { try {
       row.appendChild(top); row.appendChild(inp);
       listEl.appendChild(row);
     });
+    // The dock's height just changed; if it is corner-docked, re-pin it so a
+    // growing list does not push its footer off the bottom of the viewport.
+    place();
   }
   function removePin(id) {
     var i = -1;
@@ -262,6 +303,8 @@ const ANNOTATE = `(() => { try {
     if (repoRaf) return;
     repoRaf = requestAnimationFrame(function () {
       repoRaf = 0;
+      // A window resize moves the bottom-right corner the dock is pinned to.
+      place();
       pins.forEach(function (p) {
         if (!p.el || !p.el.isConnected || !p.outline) return;
         var r = p.el.getBoundingClientRect();
@@ -375,8 +418,17 @@ const ANNOTATE = `(() => { try {
 // replaceAll, not replace: a string `replace` substitutes only the FIRST match,
 // so a second `__MARK__` in the program would silently ship the literal and its
 // messages would never be recognised by the host.
-export function annotateJs(mode: Exclude<AnnotateMode, "off">): string {
-  return ANNOTATE.replaceAll("__MODE__", mode).replaceAll("__MARK__", ANNOT_MARK);
+//
+// `frameScale` is the CSS-transform scale the host applies to the device frame
+// (≤ 1). The overlay counter-scales its dock by the inverse so it stays readable
+// no matter how far the emulated device is shrunk. Rounded so the injected
+// literal is a short, exact number rather than 1.3333333333333333.
+export function annotateJs(mode: Exclude<AnnotateMode, "off">, frameScale = 1): string {
+  const inv = frameScale > 0 ? Math.round((1 / frameScale) * 1000) / 1000 : 1;
+  return ANNOTATE
+    .replaceAll("__MODE__", mode)
+    .replaceAll("__MARK__", ANNOT_MARK)
+    .replaceAll("__INVSCALE__", String(inv));
 }
 
 export const ANNOTATE_TEARDOWN_JS =
