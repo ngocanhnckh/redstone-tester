@@ -16,6 +16,8 @@ export const IPC = {
   jiraTransition: "jira:transition",
   jiraComment: "jira:comment",
   jiraAttachment: "jira:attachment",
+  // Retest: the verdict, its evidence and the status move, in one call.
+  jiraRetest: "jira:retest",
   llmReview: "llm:review",
   windowNew: "window:new",
   authRequest: "auth:request",

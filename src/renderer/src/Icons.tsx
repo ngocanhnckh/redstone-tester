@@ -37,6 +37,9 @@ const P: Record<string, string> = {
   paperclip: "M11.5 7.2 7.3 11.4a2.4 2.4 0 0 1-3.4-3.4l4.9-4.9a1.6 1.6 0 0 1 2.3 2.3l-4.9 4.9a.8.8 0 0 1-1.1-1.1l4.2-4.2",
   clock: "M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12M8 4.8V8l2.2 1.5",
   arrowRight: "M2.5 8h11M9.5 4 13.5 8l-4 4",
+  retest: "M13.5 8a5.5 5.5 0 1 1-1.8-4.1M13.5 2v3.2h-3.2M5.8 8.1l1.6 1.6 3-3.1",
+  box: "M4 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5",
+  boxChecked: "M4 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5M5.2 8.1l1.9 1.9 3.7-4",
 };
 
 /** Icons drawn as solid shapes rather than outlines — a saved bookmark reads as

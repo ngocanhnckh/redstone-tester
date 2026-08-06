@@ -20,6 +20,7 @@ import type { Tab } from "../../shared/tabs.js";
 import StepsPanel from "./StepsPanel.js";
 import GuestView from "./GuestView.js";
 import Bookmarks from "./Bookmarks.js";
+import RetestBar from "./RetestBar.js";
 
 export default function Browser(): JSX.Element {
   const {
@@ -420,6 +421,10 @@ export default function Browser(): JSX.Element {
         <span className="flex-1" />
         <span className="faint max-w-[200px] truncate">{active?.title}</span>
       </div>
+
+      {/* Above the steps panel: while a retest is running it is the thing being
+          worked from, and the recorder is optional beside it. */}
+      <RetestBar />
 
       {stepsOpen && <StepsPanel />}
 

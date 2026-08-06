@@ -100,3 +100,75 @@ export function ticketMarkdown(ticket: Ticket, ctx: CaptureContext, opts: Render
 export function shotName(a: Annotation): string {
   return a.kind === "region" ? `region-${a.id}.png` : `element-${a.id}.png`;
 }
+
+/** Crops from a retest, kept apart from the original filing's attachments so a
+ *  reader can tell "how it looked when reported" from "how it looks now". */
+export function retestShotName(a: Annotation): string {
+  return `retest-${shotName(a)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Retest verdict
+// ---------------------------------------------------------------------------
+
+export interface RetestReport {
+  verdict: "passed" | "failed";
+  /** Where it was retested — not necessarily where it was filed, if the ticket
+   *  named no URL and the tester drove somewhere themselves. */
+  url: string;
+  /** Device line the retest ran at. A pass at the wrong width is not a pass. */
+  device: string;
+  /** The steps the tester actually walked. */
+  steps: string[];
+  /** Whatever the tester wants to say about it. */
+  notes: string;
+  /** Fresh evidence, when it still reproduces. */
+  annotations?: Annotation[];
+  attachmentNames?: string[];
+  consoleErrors?: string[];
+}
+
+/**
+ * A retest verdict as a comment body.
+ *
+ * Same renderer as the ticket, for the same reason: what the tester previews is
+ * what lands on the issue. Deliberately lighter than a ticket — the issue
+ * already carries the report, and a comment that restates it buries the one
+ * thing a developer opened it to read, which is whether it is fixed.
+ */
+export function retestMarkdown(r: RetestReport, opts: RenderOpts = {}): string {
+  const L = ticketStrings(opts.lang ?? "English", opts.headings);
+  const out: string[] = [];
+
+  out.push(`**${r.verdict === "passed" ? L.retestPassed : L.retestFailed}**`, "");
+
+  const where = [r.device, r.url].filter(Boolean).join(" · ");
+  if (where) out.push(fill(L.retestedOn, where), "");
+
+  if (r.notes.trim()) out.push(r.notes.trim(), "");
+
+  const steps = r.steps.filter((s) => s.trim());
+  if (steps.length) {
+    out.push(`## ${L.stepsFollowed}`);
+    out.push(steps.map((s, i) => `${i + 1}. ${s.trim()}`).join("\n"), "");
+  }
+
+  // Evidence only when it failed: screenshots of a working page prove nothing
+  // and cost the reader a scroll.
+  if (r.verdict === "failed" && r.annotations?.length) {
+    out.push(`## ${L.newEvidence}`);
+    out.push(r.annotations.map((a) => domBlock(a, L)).join("\n\n"), "");
+  }
+
+  if (r.verdict === "failed" && r.consoleErrors?.length) {
+    out.push(`## ${L.consoleOutput}`);
+    out.push("```", r.consoleErrors.slice(-10).join("\n"), "```", "");
+  }
+
+  if (r.attachmentNames?.length) {
+    out.push(`## ${L.screenshots}`);
+    out.push(r.attachmentNames.map((n) => `- ${n}`).join("\n"), "");
+  }
+
+  return out.join("\n").trimEnd();
+}

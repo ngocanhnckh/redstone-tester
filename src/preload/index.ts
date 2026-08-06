@@ -8,7 +8,7 @@ import type {
   AppSettings, CaptureContext, CreatedIssue, JiraBoard, JiraComment, JiraIssueDetail,
   JiraProject, JiraStatus, JiraTransition, JiraUser, Result,
 } from "../shared/types.js";
-import type { CreateOpts, Queue, QueueOpts } from "../main/jira.js";
+import type { CreateOpts, Queue, QueueOpts, RetestOpts, RetestResult } from "../main/jira.js";
 import type { Review, ReviewInput } from "../main/llm.js";
 import type { Workspace } from "../shared/tabs.js";
 import type { AuthAnswer, AuthChallenge } from "../main/auth.js";
@@ -46,6 +46,11 @@ const api = {
     /** Attachments need the Jira credentials, which live in main — so the bytes
      *  come back as a data: URL the renderer can show directly. */
     attachment: (url: string): Promise<Result<string>> => ipcRenderer.invoke(IPC.jiraAttachment, url),
+
+    /** Record a retest verdict: evidence, comment and status move in one call,
+     *  in that order, so the issue is never moved ahead of its explanation. */
+    retest: (opts: RetestOpts): Promise<Result<RetestResult>> =>
+      ipcRenderer.invoke(IPC.jiraRetest, opts),
   },
   llm: {
     review: (ctx: CaptureContext, input: ReviewInput): Promise<Result<Review>> =>

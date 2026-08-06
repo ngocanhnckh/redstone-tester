@@ -1,9 +1,10 @@
 # Redstone Tester
 
-A browser that files bugs. Drive the site under test in the built-in browser,
-click what looks wrong, and get a professional Jira ticket — DOM reference,
-screenshot, URL, steps to reproduce, expected vs current behaviour — in about
-twenty seconds.
+A browser that files bugs — and retests them. Drive the site under test in the
+built-in browser, click what looks wrong, and get a professional Jira ticket —
+DOM reference, screenshot, URL, steps to reproduce, expected vs current
+behaviour — in about twenty seconds. When it comes back marked fixed, the same
+ticket loads back into the browser to be checked.
 
 Visually a sibling of Redstone Cowork: the same Warm Ink / liquid-glass cockpit.
 
@@ -91,6 +92,37 @@ electron-builder converts into `.icns` and `.ico`.
 Everything is editable before it leaves the app, and the Markdown you preview is
 exactly what gets filed.
 
+## How a bug gets retested
+
+Filing is the first visit. The second one — *the dev says it's fixed, check it* —
+used to mean five tabs: the ticket, its steps, the URL, the device it was found
+on, and somewhere to write the verdict. The ticket already holds all of that.
+
+Open an issue in the queue and press **Retest**. The page it was found on opens
+in a tab, the device frame goes back to the size it was found at, and the steps
+appear beside the browser as a checklist with what should have happened and what
+was happening instead.
+
+Then one of two things:
+
+- **Passes.** Write a note if it needs one, pick the status to move it to — the
+  workflow's own transitions, with the closing one preselected — and it posts.
+- **Still broken.** Highlight what is still wrong exactly as when filing. The
+  composer opens targeting the issue instead of a new one, so the AI review, the
+  screenshots and the DOM reference all land as a comment on the bug that already
+  exists. If the retest turned up a *different* defect, one checkbox files it as
+  a new bug instead.
+
+Retest screenshots are named apart from the original filing's, so an issue
+carrying two rounds still says which round each image came from. And a verdict
+of "still broken" is never offered a transition that would close the issue — the
+whole point of retesting is that somebody checked.
+
+The device restore is not a nicety: a defect that only exists at 393px does not
+reproduce on a desktop frame, and retesting it there would mark a live bug fixed.
+A ticket naming a device this build doesn't have leaves the frame alone rather
+than guessing the nearest size.
+
 ## Settings
 
 **Jira** — endpoint, deployment (Data Center/Server or Cloud), token, default
@@ -173,9 +205,26 @@ deliberately opens with no project selected — two windows on one project would
 both persist the same workspace and the last writer would clobber the other's
 tabs.
 
-Ticket bodies are rendered once, in `shared/ticketFormat.ts`. The Jira path only
-converts that Markdown to wiki markup — it never re-composes the content, so the
-preview and the filed issue cannot drift.
+Ticket bodies are rendered once, in `shared/ticketFormat.ts` — retest comments
+too. The Jira path only converts that Markdown to wiki markup; it never
+re-composes the content, so the preview and the filed issue cannot drift.
+
+Retesting reads a ticket back (`shared/retest.ts`), and it parses the *wiki
+markup* rather than the plain-text rendering the sidebar shows, because the
+markup still carries the structure. Nothing in it depends on matching a heading
+we wrote: headings are used where they match, in any language we ship or the
+model has supplied, and position is the fallback — our own bodies always run
+steps → expected → current. Failing both, the untranslated parts do the work,
+since a URL is a URL and `393×852` is a viewport in every language. Its tests
+build a body with the real ticket renderer and read it back, so a change to
+either end fails there rather than in a tester's hands.
+
+The verdict is one IPC call that attaches, comments, then transitions, in that
+order. The comment names its screenshots so they must exist first, and the status
+must not move ahead of the evidence for moving it. Only the comment can fail the
+call: a rejected attachment and a forbidden transition are reported beside a
+verdict that landed, because "your retest wasn't recorded" and "the status didn't
+move" call for different next actions.
 
 Device emulation resizes the frame and scales it down to fit the stage. Scaling
 is a CSS transform on the wrapper, which does not change layout size, so the page

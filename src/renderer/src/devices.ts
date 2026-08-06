@@ -100,6 +100,27 @@ export function describeDevice(
   return `${d.name} — ${o.w}×${o.h}${dpr}${rot}`;
 }
 
+/**
+ * The inverse of `describeDevice`, for retesting: a ticket records the device it
+ * was found on, and reproducing a responsive defect at the wrong width does not
+ * reproduce it at all.
+ *
+ * Returns null when the label names no preset we have — a device we cannot
+ * restore must leave the frame alone rather than silently pick the nearest one.
+ */
+export function deviceFromLabel(label: string): { id: string; orientation: "portrait" | "landscape" } | null {
+  const text = (label || "").trim();
+  if (!text) return null;
+  const orientation = /\(landscape\)/i.test(text) ? "landscape" : "portrait";
+  // Everything before the dash is the preset name; the size and dpr that follow
+  // are already implied by it.
+  const name = text.split(/\s+[—–-]\s+/)[0].trim();
+  if (!name) return null;
+  if (name.toLowerCase() === "desktop window") return { id: FIT.id, orientation: "portrait" };
+  const hit = DEVICES.find((d) => d.name.toLowerCase() === name.toLowerCase());
+  return hit ? { id: hit.id, orientation } : null;
+}
+
 // Chrome's own emulation strings, so a site that sniffs the UA serves the same
 // thing it would to the real device.
 const IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";

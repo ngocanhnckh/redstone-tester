@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEVICES, DEVICE_GROUPS, FIT, deviceById, describeDevice, fitScale, orient, userAgentFor,
+  DEVICES, DEVICE_GROUPS, FIT, deviceById, deviceFromLabel, describeDevice, fitScale, orient,
+  userAgentFor,
 } from "./devices.js";
 
 describe("device catalogue", () => {
@@ -98,5 +99,35 @@ describe("userAgentFor", () => {
     expect(userAgentFor(deviceById("iphone-15"))).toContain("iPhone");
     expect(userAgentFor(deviceById("ipad-pro-11"))).toContain("iPad");
     expect(userAgentFor(deviceById("galaxy-s24"))).toContain("Android");
+  });
+});
+
+describe("deviceFromLabel", () => {
+  it("round-trips every preset through describeDevice", () => {
+    // This is the retest path: a ticket records `describeDevice`, and reopening
+    // it has to land on the same frame. A preset whose name gains a dash would
+    // break the trip silently, so every one of them is checked.
+    for (const d of DEVICES) {
+      for (const o of ["portrait", "landscape"] as const) {
+        const back = deviceFromLabel(describeDevice(d, o, { w: d.w, h: d.h }));
+        expect(back?.id, d.name).toBe(d.id);
+        // Square devices carry no orientation, so they always read as portrait.
+        if (d.w !== d.h) expect(back?.orientation, d.name).toBe(o);
+      }
+    }
+  });
+
+  it("reads the desktop window back as fit-to-window", () => {
+    expect(deviceFromLabel(describeDevice(FIT, "portrait", { w: 1440, h: 900 })))
+      .toEqual({ id: FIT.id, orientation: "portrait" });
+    expect(deviceFromLabel("Desktop window")?.id).toBe(FIT.id);
+  });
+
+  it("leaves the frame alone for a device it does not have", () => {
+    // Guessing the nearest size would retest a responsive defect at the wrong
+    // width, which is worse than not restoring the frame at all.
+    expect(deviceFromLabel("Nokia 3310 — 84×48")).toBeNull();
+    expect(deviceFromLabel("")).toBeNull();
+    expect(deviceFromLabel("   ")).toBeNull();
   });
 });

@@ -64,6 +64,14 @@ export interface TicketStrings {
   /** `%s` is the reporter's name. */
   filedBy: string;
   filed: string;
+
+  // Retest verdict, posted as a comment on an existing issue.
+  retestPassed: string;
+  retestFailed: string;
+  stepsFollowed: string;
+  newEvidence: string;
+  /** `%s` is the device line, e.g. `iPhone 15 — 393×852 @3x`. */
+  retestedOn: string;
 }
 
 const EN: TicketStrings = {
@@ -93,6 +101,11 @@ const EN: TicketStrings = {
   openStep: "Open %s",
   filedBy: "Filed with Redstone Tester by %s.",
   filed: "Filed with Redstone Tester.",
+  retestPassed: "Retest passed",
+  retestFailed: "Retest failed — still reproducible",
+  stepsFollowed: "Steps followed",
+  newEvidence: "New evidence",
+  retestedOn: "Retested on %s",
 };
 
 const VI: TicketStrings = {
@@ -122,6 +135,11 @@ const VI: TicketStrings = {
   openStep: "Mở %s",
   filedBy: "Tạo bằng Redstone Tester bởi %s.",
   filed: "Tạo bằng Redstone Tester.",
+  retestPassed: "Kiểm thử lại: đạt",
+  retestFailed: "Kiểm thử lại: vẫn tái hiện được",
+  stepsFollowed: "Các bước đã thực hiện",
+  newEvidence: "Bằng chứng mới",
+  retestedOn: "Kiểm thử lại trên %s",
 };
 
 /** Hand-verified translations. Every other language gets its headings from the
@@ -171,7 +189,25 @@ export const TRANSLATABLE: Array<keyof TicketStrings> = [
   "steps", "expected", "current", "domReference", "consoleOutput", "environment",
   "screenshots", "region", "observed", "domPath", "text", "attributes", "computed",
   "url", "pageTitle", "device", "viewport", "userAgent", "severity", "notes",
+  "retestPassed", "retestFailed", "stepsFollowed", "newEvidence",
 ];
+
+/**
+ * Every heading we might have written for `key`, across the languages we ship.
+ *
+ * Needed only when READING a ticket back — retesting an issue means parsing a
+ * body we wrote at some unknown point, possibly in a language the settings have
+ * since moved off. So the reader tries all of them rather than assuming the
+ * current one.
+ */
+export function knownHeadings(key: keyof TicketStrings): string[] {
+  const seen = new Set<string>();
+  for (const strings of Object.values(BUILT_IN)) {
+    const v = strings[key];
+    if (v) seen.add(v);
+  }
+  return [...seen];
+}
 
 /** Fill a single `%s` placeholder. */
 export function fill(template: string, value: string): string {

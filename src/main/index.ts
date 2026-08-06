@@ -146,6 +146,8 @@ function registerIpc(): void {
     await jira.addComment(await loadSettings(), key, body));
   handle(IPC.jiraAttachment, async (url: string) =>
     await jira.fetchAttachment(await loadSettings(), url));
+  handle(IPC.jiraRetest, async (opts: jira.RetestOpts) =>
+    await jira.postRetest(await loadSettings(), opts));
 
   handle(IPC.llmReview, async (ctx: CaptureContext, input: ReviewInput) =>
     await review(await loadSettings(), ctx, input));

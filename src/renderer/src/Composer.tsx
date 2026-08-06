@@ -8,7 +8,7 @@ import { useStore } from "./store.js";
 import { Icon } from "./Icons.js";
 import AiReview from "./AiReview.js";
 import AssigneePicker from "./AssigneePicker.js";
-import { shotName, ticketMarkdown } from "../../shared/ticketFormat.js";
+import { retestMarkdown, retestShotName, shotName, ticketMarkdown } from "../../shared/ticketFormat.js";
 import type { Severity, Ticket } from "../../shared/types.js";
 
 const SEVERITIES: Severity[] = ["Blocker", "Critical", "Major", "Minor", "Trivial"];
@@ -20,11 +20,27 @@ type Status =
   | { kind: "error"; text: string };
 
 export default function Composer(): JSX.Element | null {
-  const { capture, ticket, settings, project, setTicket, closeComposer, openSettings } = useStore();
+  const {
+    capture, ticket, settings, project, retest,
+    setTicket, closeComposer, openSettings, endRetest,
+  } = useStore();
 
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [preview, setPreview] = useState(false);
   const [assignee, setAssignee] = useState("");
+  /** A retest that turns up a DIFFERENT defect is a new bug, not a comment on
+   *  the old one — so the tester can always override the target. */
+  const [asNew, setAsNew] = useState(false);
+  /** The verdict has landed. The retest itself is not ended until the composer
+   *  closes: flipping this pane back to "Compose the ticket" the instant the
+   *  comment posts would read as though nothing had been filed. */
+  const [posted, setPosted] = useState(false);
+  const onRetest = Boolean(retest) && !asNew;
+
+  const dismiss = () => {
+    if (posted && retest) endRetest();
+    closeComposer();
+  };
 
   // A window files into ITS project, not the saved default — that is the whole
   // point of being able to open a second window on another project.
@@ -35,25 +51,52 @@ export default function Composer(): JSX.Element | null {
 
   const attachments = useMemo(() => {
     if (!capture) return [];
+    // Retest crops are named apart from the original filing's, so an issue with
+    // two rounds of screenshots still says which round each one came from.
+    const name = onRetest ? retestShotName : shotName;
     const list = capture.annotations
       .filter((a) => a.shot)
-      .map((a) => ({ name: shotName(a), dataUrl: a.shot as string }));
-    if (capture.pageShot) list.push({ name: "full-page.png", dataUrl: capture.pageShot });
+      .map((a) => ({ name: name(a), dataUrl: a.shot as string }));
+    if (capture.pageShot) {
+      list.push({ name: onRetest ? "retest-full-page.png" : "full-page.png", dataUrl: capture.pageShot });
+    }
     return list;
-  }, [capture]);
+  }, [capture, onRetest]);
+
+  const lang = settings.llm.ticketLang;
+  const headings = settings.llm.headings?.[lang.trim().toLowerCase()];
 
   const markdown = useMemo(() => {
     if (!capture || !ticket) return "";
-    const lang = settings.llm.ticketLang;
     return ticketMarkdown(ticket, capture, {
       attachmentNames: attachments.map((a) => a.name),
       tester: settings.tester,
       lang,
-      headings: settings.llm.headings?.[lang.trim().toLowerCase()],
+      headings,
     });
-  }, [capture, ticket, attachments, settings.tester, settings.llm.ticketLang, settings.llm.headings]);
+  }, [capture, ticket, attachments, settings.tester, lang, headings]);
+
+  /** The same draft, rendered as a verdict comment instead of a new ticket. The
+   *  fields are the same ones the AI reviewed — `current` is what still happens,
+   *  which is exactly what a retest comment is for. */
+  const comment = useMemo(() => {
+    if (!capture || !ticket || !retest) return "";
+    return retestMarkdown({
+      verdict: "failed",
+      url: capture.url,
+      device: capture.device ?? `${capture.viewport.w}×${capture.viewport.h}`,
+      steps: ticket.stepsToReproduce,
+      notes: ticket.current,
+      annotations: capture.annotations,
+      attachmentNames: attachments.map((a) => a.name),
+      consoleErrors: capture.consoleErrors,
+    }, { lang, headings });
+  }, [capture, ticket, retest, attachments, lang, headings]);
 
   if (!capture || !ticket) return null;
+
+  /** What the tester previews is what leaves the app — on both paths. */
+  const body = onRetest ? comment : `# ${ticket.summary}\n\n${markdown}`;
 
   const patch = (p: Partial<Ticket>) => setTicket({ ...ticket, ...p });
 
@@ -72,9 +115,31 @@ export default function Composer(): JSX.Element | null {
     setStatus({ kind: "ok", text: `Filed ${r.data.key}`, url: r.data.url });
   };
 
+  /** Post the verdict on the issue being retested instead of opening a new one.
+   *  The bug is already tracked; a second ticket for the same defect splits its
+   *  history across two issues and neither one tells the whole story. */
+  const submitRetest = async () => {
+    if (!retest) return;
+    setStatus({ kind: "busy", text: `Commenting on ${retest.key}…` });
+    const r = await window.tester.jira.retest({
+      issueKey: retest.key,
+      markdown: comment,
+      attachments,
+    });
+    if (!r.ok) { setStatus({ kind: "error", text: r.error }); return; }
+    const missed = r.data.failedAttachments.length;
+    setStatus({
+      kind: "ok",
+      text: `Recorded on ${retest.key} — still broken${
+        missed ? ` (${missed} screenshot${missed === 1 ? "" : "s"} did not upload)` : ""}`,
+      url: retest.issueUrl,
+    });
+    setPosted(true);
+  };
+
   const copy = async () => {
-    await window.tester.clipboard.text(`# ${ticket.summary}\n\n${markdown}`);
-    setStatus({ kind: "ok", text: "Ticket copied to clipboard." });
+    await window.tester.clipboard.text(body);
+    setStatus({ kind: "ok", text: onRetest ? "Comment copied to clipboard." : "Ticket copied to clipboard." });
   };
 
   const copyImage = async () => {
@@ -95,8 +160,10 @@ export default function Composer(): JSX.Element | null {
         <div className="flex items-start justify-between gap-3 border-b px-5 py-4"
           style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
-            <div className="kicker mb-1.5">Bug report</div>
-            <div className="display text-[26px]">Compose the ticket</div>
+            <div className="kicker mb-1.5">{onRetest ? `Retest · ${retest?.key}` : "Bug report"}</div>
+            <div className="display text-[26px]">
+              {onRetest ? "It is still broken" : "Compose the ticket"}
+            </div>
             <div className="faint mono mt-1.5 truncate text-[11px]">{capture.url}</div>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="chip mono !text-[10px]">
@@ -109,7 +176,8 @@ export default function Composer(): JSX.Element | null {
               </span>
             </div>
           </div>
-          <button className="btn btn--icon btn--ghost no-drag" onClick={closeComposer} title="Discard">
+          <button className="btn btn--icon btn--ghost no-drag" onClick={dismiss}
+            title={posted ? "Close" : "Discard"}>
             <Icon name="close" />
           </button>
         </div>
@@ -166,7 +234,7 @@ export default function Composer(): JSX.Element | null {
 
           {preview ? (
             <pre className="glass-inset mono overflow-x-auto whitespace-pre-wrap rounded-xl p-4 text-[11.5px] leading-relaxed soft">
-              {`# ${ticket.summary}\n\n${markdown}`}
+              {body}
             </pre>
           ) : (
             <div className="space-y-4">
@@ -270,7 +338,7 @@ export default function Composer(): JSX.Element | null {
             <span className="flex-1" />
 
             <button className="btn" onClick={() => void copy()}>
-              <Icon name="copy" /> Copy ticket
+              <Icon name="copy" /> Copy {onRetest ? "comment" : "ticket"}
             </button>
             {(capture.pageShot || attachments.length > 0) && (
               <button className="btn btn--icon" onClick={() => void copyImage()} title="Copy screenshot">
@@ -278,19 +346,33 @@ export default function Composer(): JSX.Element | null {
               </button>
             )}
 
-            {jiraConfigured ? (
+            {!jiraConfigured ? (
+              <button className="btn btn--clay" onClick={() => openSettings(true)}>
+                <Icon name="gear" /> Connect Jira
+              </button>
+            ) : onRetest ? (
+              <button className="btn btn--clay" disabled={busy || posted}
+                onClick={() => void submitRetest()}>
+                <Icon name={posted ? "check" : "send"} />
+                {posted ? `Recorded on ${retest?.key}` : `Comment on ${retest?.key}`}
+              </button>
+            ) : (
               <button className="btn btn--clay" disabled={busy || !ticket.summary.trim()}
                 onClick={() => void submit()}>
                 <Icon name="send" /> Create in {project}
               </button>
-            ) : (
-              <button className="btn btn--clay" onClick={() => openSettings(true)}>
-                <Icon name="gear" /> Connect Jira
-              </button>
             )}
           </div>
 
-          {jiraConfigured && settings.jira.autoAddToSprint && (
+          {/* A retest can uncover something the ticket never described. That is a
+              new bug, and burying it in a comment on an old one loses it. */}
+          {jiraConfigured && retest && (
+            <label className="faint mt-2 flex items-center gap-1.5 text-[10.5px]">
+              <input type="checkbox" checked={asNew} onChange={(e) => setAsNew(e.target.checked)} />
+              This is a different defect — file it as a new bug in {project} instead
+            </label>
+          )}
+          {jiraConfigured && !onRetest && settings.jira.autoAddToSprint && (
             <div className="faint mt-2 text-[10.5px]">
               Will be added to the active sprint{settings.jira.boardId ? ` on board ${settings.jira.boardId}` : ""}.
             </div>

@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from "../../shared/types.js";
 import type { Review } from "../../main/llm.js";
 import type { AuthChallenge } from "../../main/auth.js";
 import type { AnnotateMode } from "./guest.js";
+import type { RetestPlan } from "../../shared/retest.js";
 import { FIT } from "./devices.js";
 import {
   Bookmark, DEFAULT_QUEUE, QueuePrefs, Tab, TabState,
@@ -18,6 +19,22 @@ const STEP_CAP = 200;
 const ERROR_CAP = 40;
 
 export type Orientation = "portrait" | "landscape";
+
+/** An issue being retested in this window.
+ *
+ *  Deliberately not persisted with the workspace: a retest is a thing you are
+ *  doing right now, and restoring a half-finished one from last week would put a
+ *  stale verdict in front of the tester as if it were live. */
+export interface RetestSession {
+  key: string;
+  summary: string;
+  /** Jira browse URL, so the issue is one click away while retesting. */
+  issueUrl: string;
+  /** What the ticket said to do. */
+  plan: RetestPlan;
+  /** Which steps have been walked, parallel to `plan.steps`. */
+  done: boolean[];
+}
 
 /** The project this window is testing. Read from the URL hash the main process
  *  set at creation, so a second window opens straight into its own project. */
@@ -79,6 +96,11 @@ export interface State {
   /** Issue key open in the detail pane, or "" for the list. */
   openIssue: string;
 
+  /** The issue this window is retesting, if any. */
+  retest: RetestSession | null;
+  /** Whether the retest checklist is expanded. */
+  retestOpen: boolean;
+
   setSettings: (s: AppSettings) => void;
   openSettings: (open: boolean) => void;
   setProject: (key: string) => void;
@@ -92,6 +114,10 @@ export interface State {
   hydrate: (state: TabState, bookmarks: Bookmark[], queue: QueuePrefs) => void;
   setQueue: (patch: Partial<QueuePrefs>) => void;
   setOpenIssue: (key: string) => void;
+  startRetest: (session: Omit<RetestSession, "done">) => void;
+  toggleRetestStep: (index: number) => void;
+  openRetest: (open: boolean) => void;
+  endRetest: () => void;
   bookmark: (entry: Bookmark) => void;
   unbookmark: (url: string) => void;
   setDevice: (id: string) => void;
@@ -158,11 +184,16 @@ export const useStore = create<State>((set) => ({
   queue: { ...DEFAULT_QUEUE },
   openIssue: "",
 
+  retest: null,
+  retestOpen: true,
+
   setSettings: (settings) => set({ settings, ready: true }),
   openSettings: (settingsOpen) => set({ settingsOpen }),
   // Changing project swaps the whole workspace: its tabs and bookmarks are
-  // loaded by an effect, which `hydrated: false` re-arms.
-  setProject: (project) => set({ project, projectPickerOpen: false, hydrated: false }),
+  // loaded by an effect, which `hydrated: false` re-arms. A retest in flight
+  // belongs to the project we are leaving, so it goes with it — its issue key
+  // would not even resolve in the next one.
+  setProject: (project) => set({ project, projectPickerOpen: false, hydrated: false, retest: null }),
   openProjectPicker: (projectPickerOpen) => set({ projectPickerOpen }),
   setNav: (p) => set(p),
 
@@ -182,6 +213,21 @@ export const useStore = create<State>((set) => ({
   }),
   setQueue: (patch) => set((s) => ({ queue: { ...s.queue, ...patch } })),
   setOpenIssue: (openIssue) => set({ openIssue }),
+
+  // Starting a retest clears the previous run's evidence for the same reason
+  // recording does: a verdict assembled from two runs describes neither.
+  startRetest: (session) => set({
+    retest: { ...session, done: session.plan.steps.map(() => false) },
+    retestOpen: true,
+    annotations: [],
+    consoleErrors: [],
+    mode: "off",
+  }),
+  toggleRetestStep: (index) => set((s) => (s.retest
+    ? { retest: { ...s.retest, done: s.retest.done.map((d, i) => (i === index ? !d : d)) } }
+    : s)),
+  openRetest: (retestOpen) => set({ retestOpen }),
+  endRetest: () => set({ retest: null }),
   bookmark: (entry) => set((s) => ({ bookmarks: addBookmark(s.bookmarks, entry) })),
   unbookmark: (url) => set((s) => ({ bookmarks: removeBookmark(s.bookmarks, url) })),
   setDevice: (deviceId) => set({ deviceId }),

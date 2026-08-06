@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ticketMarkdown } from "./ticketFormat.js";
+import { retestMarkdown, ticketMarkdown } from "./ticketFormat.js";
 import { markdownToJira } from "./jiraMarkup.js";
 import type { Annotation, CaptureContext, Ticket } from "./types.js";
 
@@ -87,5 +87,76 @@ describe("ticketMarkdown", () => {
     expect(wiki).toContain("h2. DOM reference");
     expect(wiki).toContain("{{#total}}");
     expect(wiki).not.toContain("## ");
+  });
+});
+
+describe("retestMarkdown", () => {
+  const base = {
+    url: "https://shop.test/cart",
+    device: "iPhone 15 / 14 Pro — 393×852 @3x (portrait)",
+    steps: ["Open https://shop.test/", "Open the cart"],
+    notes: "",
+  };
+
+  it("leads with the verdict, because that is why the issue was opened", () => {
+    const out = retestMarkdown({ ...base, verdict: "passed" });
+    expect(out.split("\n")[0]).toBe("**Retest passed**");
+  });
+
+  it("records where it was retested — a pass at the wrong width is not a pass", () => {
+    const out = retestMarkdown({ ...base, verdict: "passed" });
+    expect(out).toContain("Retested on iPhone 15 / 14 Pro — 393×852 @3x (portrait) · https://shop.test/cart");
+  });
+
+  it("carries the steps that were actually followed", () => {
+    const out = retestMarkdown({ ...base, verdict: "passed" });
+    expect(out).toContain("## Steps followed");
+    expect(out).toContain("1. Open https://shop.test/");
+    expect(out).toContain("2. Open the cart");
+  });
+
+  it("attaches evidence and console output only when it still reproduces", () => {
+    const evidence = {
+      ...base,
+      annotations: [annotation],
+      attachmentNames: ["retest-element-1.png"],
+      consoleErrors: ["TypeError: nope"],
+    };
+    const failed = retestMarkdown({ ...evidence, verdict: "failed" });
+    expect(failed).toContain("## New evidence");
+    expect(failed).toContain("`#total`");
+    expect(failed).toContain("TypeError: nope");
+
+    // Screenshots of a working page prove nothing and cost the reader a scroll.
+    const passed = retestMarkdown({ ...evidence, verdict: "passed" });
+    expect(passed).not.toContain("## New evidence");
+    expect(passed).not.toContain("TypeError: nope");
+    // The attachment list still stands: they were uploaded either way.
+    expect(passed).toContain("retest-element-1.png");
+  });
+
+  it("writes the verdict in the ticket language", () => {
+    const out = retestMarkdown({ ...base, verdict: "failed" }, { lang: "Tiếng Việt" });
+    expect(out).toContain("Kiểm thử lại: vẫn tái hiện được");
+    expect(out).toContain("Các bước đã thực hiện");
+  });
+
+  it("falls back to English for a language with no headings yet", () => {
+    // Half a ticket in one language reads worse than all of it in English.
+    const out = retestMarkdown({ ...base, verdict: "passed" }, { lang: "Deutsch" });
+    expect(out).toContain("Retest passed");
+  });
+
+  it("survives a retest with no steps, no notes and no evidence", () => {
+    const out = retestMarkdown({ verdict: "passed", url: "", device: "", steps: [], notes: "" });
+    expect(out).toBe("**Retest passed**");
+  });
+
+  it("converts to wiki markup without leaking Markdown markers", () => {
+    const wiki = markdownToJira(retestMarkdown({ ...base, verdict: "passed", notes: "Fixed in build 419." }));
+    expect(wiki).toContain("*Retest passed*");
+    expect(wiki).toContain("h2. Steps followed");
+    expect(wiki).toContain("# Open https://shop.test/");
+    expect(wiki).not.toContain("**");
   });
 });

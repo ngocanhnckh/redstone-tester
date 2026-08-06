@@ -11,6 +11,8 @@ import type { JSX, ReactNode } from "react";
 import { useStore } from "./store.js";
 import { Icon } from "./Icons.js";
 import { jiraToPlain } from "../../shared/jiraMarkup.js";
+import { isActionable, parseRetestPlan } from "../../shared/retest.js";
+import { deviceFromLabel } from "./devices.js";
 import { fileSize, relTime } from "../../shared/time.js";
 import type {
   JiraAttachment, JiraIssue, JiraIssueDetail, JiraStatus, JiraTransition,
@@ -25,7 +27,10 @@ function statusTone(category?: string): { bg: string; fg: string } {
 }
 
 export default function Queue(): JSX.Element {
-  const { project, queue, openIssue, setQueue, setOpenIssue, openTab } = useStore();
+  const {
+    project, queue, openIssue, settings, retest,
+    setQueue, setOpenIssue, openTab, startRetest, setDevice, setOrientation,
+  } = useStore();
 
   const [statuses, setStatuses] = useState<JiraStatus[]>([]);
   const [issues, setIssues] = useState<JiraIssue[] | null>(null);
@@ -52,6 +57,22 @@ export default function Queue(): JSX.Element {
   }, [project, queue.statuses, queue.sprintOnly]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * Start retesting an issue: recover what the ticket says, put the page back in
+   * front of the tester, and restore the device it was found on.
+   *
+   * That last part is not a nicety. Half of what this tool files is responsive —
+   * a defect that only exists at 393px wide does not reproduce on a desktop
+   * frame, and retesting it there would mark a live bug as fixed.
+   */
+  const beginRetest = useCallback((issue: JiraIssueDetail) => {
+    const plan = parseRetestPlan(issue.description, Object.values(settings.llm.headings ?? {}));
+    startRetest({ key: issue.key, summary: issue.summary, issueUrl: issue.url, plan });
+    if (plan.url) openTab(plan.url);
+    const device = deviceFromLabel(plan.device);
+    if (device) { setDevice(device.id); setOrientation(device.orientation); }
+  }, [settings.llm.headings, startRetest, openTab, setDevice, setOrientation]);
 
   // The status list only changes when the project does.
   useEffect(() => {
@@ -179,6 +200,8 @@ export default function Queue(): JSX.Element {
             onBack={() => setOpenIssue("")}
             onChanged={() => void load()}
             onOpenInBrowser={(url) => openTab(url)}
+            onRetest={beginRetest}
+            retestingKey={retest?.key ?? ""}
           />
         ) : (
           <>
@@ -236,11 +259,14 @@ function IssueRow({ issue, onOpen }: { issue: JiraIssue; onOpen: () => void }): 
   );
 }
 
-function IssueDetail({ issueKey, onBack, onChanged, onOpenInBrowser }: {
+function IssueDetail({ issueKey, onBack, onChanged, onOpenInBrowser, onRetest, retestingKey }: {
   issueKey: string;
   onBack: () => void;
   onChanged: () => void;
   onOpenInBrowser: (url: string) => void;
+  onRetest: (issue: JiraIssueDetail) => void;
+  /** Issue this window is already retesting, so the button can say so. */
+  retestingKey: string;
 }): JSX.Element {
   const [issue, setIssue] = useState<JiraIssueDetail | null>(null);
   const [transitions, setTransitions] = useState<JiraTransition[]>([]);
@@ -249,6 +275,7 @@ function IssueDetail({ issueKey, onBack, onChanged, onOpenInBrowser }: {
   const [moveOpen, setMoveOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const headings = useStore((s) => s.settings.llm.headings);
 
   const load = useCallback(async () => {
     setError("");
@@ -304,6 +331,10 @@ function IssueDetail({ issueKey, onBack, onChanged, onOpenInBrowser }: {
 
   const tone = statusTone(issue.statusCategory);
   const body = jiraToPlain(issue.description);
+  // Parsed for the button's own sake: a ticket with nothing to drive should say
+  // so here rather than open an empty checklist and look broken.
+  const plan = parseRetestPlan(issue.description, Object.values(headings ?? {}));
+  const retesting = retestingKey === issue.key;
 
   return (
     <div className="flex flex-col gap-3 p-3">
@@ -367,6 +398,26 @@ function IssueDetail({ issueKey, onBack, onChanged, onOpenInBrowser }: {
           </div>
         )}
       </div>
+
+      {/* The reason a tester opened this issue at all: check whether it is
+          actually fixed. It loads the page, the steps and the device the defect
+          was found on, beside the browser. */}
+      <button
+        className={`btn w-full !justify-center ${retesting ? "btn--on" : "btn--clay"}`}
+        disabled={retesting || !isActionable(plan)}
+        onClick={() => onRetest(issue)}
+        title={isActionable(plan)
+          ? "Load this ticket's page, steps and device, and record a verdict"
+          : "This ticket names no URL and no steps to follow"}
+      >
+        <Icon name="retest" size={13} />
+        {retesting ? "Retesting this now" : "Retest"}
+      </button>
+      {!isActionable(plan) && (
+        <div className="faint -mt-1.5 text-[10.5px] leading-relaxed">
+          Nothing to load — this ticket names no URL and no steps.
+        </div>
+      )}
 
       {error && (
         <div className="chip chip--warn w-full !justify-start !py-1.5">

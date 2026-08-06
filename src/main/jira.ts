@@ -650,6 +650,71 @@ export async function attach(
   return api<void>(s, `/rest/api/2/issue/${issueKey}/attachments`, { method: "POST", body: form });
 }
 
+// ---------------------------------------------------------------------------
+// Retest
+// ---------------------------------------------------------------------------
+
+export interface RetestOpts {
+  issueKey: string;
+  /** The verdict comment, as Markdown the tester previewed. */
+  markdown: string;
+  /** Fresh crops, when the defect still reproduces. */
+  attachments?: Array<{ name: string; dataUrl: string }>;
+  /** Workflow move to apply once the verdict is recorded. Empty leaves the
+   *  status alone — a tester without transition rights can still report. */
+  transitionId?: string;
+}
+
+export interface RetestResult {
+  comment: JiraComment;
+  /** Attachments that failed to upload, named. The verdict still landed. */
+  failedAttachments: string[];
+  /** True when a transition was requested AND applied. */
+  moved: boolean;
+  /** Why the move did not happen, when one was asked for. */
+  moveError?: string;
+}
+
+/**
+ * Record a retest verdict on an existing issue.
+ *
+ * Ordered attach → comment → transition, and that order is load-bearing. The
+ * comment names its screenshots, so they must already exist on the issue when it
+ * is read; and the status must not move until the evidence for moving it is
+ * there, or a developer who opens the issue on the notification sees a reopened
+ * bug with nothing to explain it.
+ *
+ * Only the comment is allowed to fail the whole call. A rejected attachment or a
+ * transition the workflow forbids is reported alongside a verdict that landed,
+ * because "your retest was not recorded" and "the status did not move" are
+ * different problems and the tester's next action differs.
+ */
+export async function postRetest(s: AppSettings, opts: RetestOpts): Promise<Result<RetestResult>> {
+  const key = opts.issueKey.trim();
+  if (!key) return err("No issue to retest.");
+
+  const failedAttachments: string[] = [];
+  for (const att of opts.attachments ?? []) {
+    const r = await attach(s, key, att.name, att.dataUrl).catch(
+      (e: Error) => err(e.message) as Result<void>,
+    );
+    if (!r.ok) failedAttachments.push(att.name);
+  }
+
+  const posted = await addComment(s, key, opts.markdown);
+  if (!posted.ok) return posted;
+
+  let moved = false;
+  let moveError: string | undefined;
+  if (opts.transitionId) {
+    const t = await transitionIssue(s, key, opts.transitionId);
+    if (t.ok) moved = true;
+    else moveError = t.error;
+  }
+
+  return ok({ comment: posted.data, failedAttachments, moved, moveError });
+}
+
 /** Move a freshly created issue into the board's active sprint. */
 export async function addToActiveSprint(
   s: AppSettings, issueKey: string, project?: string,
