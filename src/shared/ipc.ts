@@ -24,6 +24,12 @@ export const IPC = {
   authRespond: "auth:respond",
   authCount: "auth:count",
   authForget: "auth:forget",
+  // The docked inspector. Its frontend is a native view main owns, so the
+  // renderer hands over the guest to inspect and where to draw it.
+  devtoolsAttach: "devtools:attach",
+  devtoolsBounds: "devtools:bounds",
+  devtoolsDetach: "devtools:detach",
+  devtoolsToggle: "devtools:toggle",
   workspaceGet: "workspace:get",
   workspaceSet: "workspace:set",
   clipboardWrite: "clipboard:write",

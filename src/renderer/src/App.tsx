@@ -15,12 +15,19 @@ export default function App(): JSX.Element {
     ready, settings, mode, capture, project, recording, hydrated,
     tabs, activeId, bookmarks, queue,
     openSettings, setSettings, setMode, setProject, openProjectPicker, setRecording,
-    hydrate, openTab, shutTab, setAuthChallenge, setQueue,
+    hydrate, openTab, shutTab, setAuthChallenge, setQueue, openDevtools,
   } = useStore();
 
   // A page can challenge for credentials at any moment, including during the
   // very first restore, so this listener is attached before anything else runs.
   useEffect(() => window.tester.auth.onRequest(setAuthChallenge), [setAuthChallenge]);
+
+  // F12 pressed inside the page under test. It cannot reach the keydown handler
+  // below — a guest is its own frame tree and swallows its own keys — so main
+  // sees it first and forwards it here.
+  useEffect(() => window.tester.devtools.onToggle(
+    () => openDevtools(!useStore.getState().devtools.open),
+  ), [openDevtools]);
 
   useEffect(() => {
     void window.tester.settings.get().then((s) => {
@@ -95,11 +102,19 @@ export default function App(): JSX.Element {
         if (st.activeId) shutTab(st.activeId);
       }
       if (meta && e.key === ",") { e.preventDefault(); openSettings(true); }
+      // F12 and not ⌘⇧I: Electron's default menu already owns ⌘⇧I for the
+      // cockpit's OWN devtools, which is what you want when developing this app
+      // and never what you want when testing a site in it. Two different
+      // inspectors on one chord would be indistinguishable at the keyboard.
+      if (e.key === "F12") {
+        e.preventDefault();
+        openDevtools(!useStore.getState().devtools.open);
+      }
       if (e.key === "Escape" && mode !== "off") setMode("off");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, recording, setMode, setRecording, openSettings, openTab, shutTab, setQueue]);
+  }, [mode, recording, setMode, setRecording, openSettings, openTab, shutTab, setQueue, openDevtools]);
 
   const jiraOn = Boolean(settings.jira.endpoint && settings.jira.token);
   const aiOn = Boolean(settings.llm.endpoint && settings.llm.model);

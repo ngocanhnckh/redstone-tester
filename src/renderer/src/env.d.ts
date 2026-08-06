@@ -15,14 +15,11 @@ export interface WebviewEl extends HTMLElement {
   goForward(): void;
   canGoBack(): boolean;
   canGoForward(): boolean;
-  isLoading(): boolean;
   executeJavaScript(code: string): Promise<unknown>;
   capturePage(rect?: { x: number; y: number; width: number; height: number }): Promise<{ toDataURL(): string }>;
-  openDevTools(): void;
-  closeDevTools(): void;
-  isDevToolsOpened(): boolean;
-  setZoomFactor(f: number): void;
-  getUserAgent(): string;
+  /** Throws until the element is in the DOM *and* has emitted `dom-ready` —
+   *  which makes it the readiness gate for anything main has to address by id. */
+  getWebContentsId(): number;
   setUserAgent(userAgent: string): void;
 }
 

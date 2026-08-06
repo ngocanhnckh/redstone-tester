@@ -4,6 +4,13 @@
 import type { Lang, TicketStrings } from "./i18n.js";
 import { DEFAULT_LANG } from "./i18n.js";
 
+/** Where the docked inspector should be drawn, in the window's own coordinates.
+ *  Its frontend is a native view, which cannot be laid out by CSS — the renderer
+ *  measures the slot it should cover and main positions it there. Window
+ *  coordinates because the cockpit is frameless, so `getBoundingClientRect`
+ *  already speaks them. */
+export interface DockBounds { x: number; y: number; width: number; height: number }
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------

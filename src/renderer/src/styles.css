@@ -194,3 +194,19 @@ select.field option { background: var(--app-panel); color: var(--text); }
 /* ── the guest webview ──────────────────────────────────────────────── */
 webview { display: flex; width: 100%; height: 100%; background: #fff; }
 webview.crosshair { cursor: crosshair; }
+
+/* Where the inspector's native view is drawn. Nothing renders inside it — this
+   is only what shows in the moment before the frontend paints, and while the
+   view is hidden behind a modal. */
+.dock-slot { background: var(--app-panel); }
+
+/* ── the docked inspector ───────────────────────────────────────────────
+   `.resizing` holds for the length of a splitter drag: it stops the drag
+   selecting text, and takes the guests out of hit-testing so the page under
+   test cannot claim the pointer as the cursor sweeps across it. */
+.splitter { flex: none; border-radius: 999px; background: transparent; transition: background-color .15s; }
+.splitter:hover { background: rgb(var(--primary-soft) / .5); }
+.splitter--h { height: 6px; margin: 1px 0; cursor: row-resize; }
+.splitter--v { width: 6px; margin: 0 1px; cursor: col-resize; }
+.resizing { user-select: none; }
+.resizing webview { pointer-events: none; }

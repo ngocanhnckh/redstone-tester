@@ -18,6 +18,7 @@ import { isBookmarked } from "../../shared/tabs.js";
 import { recorderPhrases } from "../../shared/i18n.js";
 import StepsPanel from "./StepsPanel.js";
 import GuestView from "./GuestView.js";
+import DevTools from "./DevTools.js";
 import Bookmarks from "./Bookmarks.js";
 import RetestBar from "./RetestBar.js";
 import TabStrip from "./TabStrip.js";
@@ -25,8 +26,10 @@ import TabStrip from "./TabStrip.js";
 export default function Browser(): JSX.Element {
   const {
     settings, mode, annotations, steps, consoleErrors, recording, stepsOpen,
-    deviceId, orientation, viewport, tabs, activeId, bookmarks, armError,
+    deviceId, orientation, viewport, tabs, activeId, bookmarks, armError, devtools,
+    settingsOpen, projectPickerOpen, authChallenge,
     setNav, setMode, setDevice, setOrientation, setRecording, openSteps, setArmError,
+    openDevtools, setDevtoolsSide, setDevtoolsSize,
     openTab, shutTab, focusTab, updateTab, bookmark, unbookmark,
     addAnnotation, patchAnnotation, removeAnnotation, clearAnnotations,
     addStep, addConsoleError, openComposer, capture,
@@ -39,6 +42,8 @@ export default function Browser(): JSX.Element {
   const [loadedUa, setLoadedUa] = useState<string | null>(null);
   /** While the address bar has focus we must not overwrite what is being typed. */
   const [editing, setEditing] = useState(false);
+  /** Set for the length of an inspector drag — see `.resizing` in styles.css. */
+  const [resizing, setResizing] = useState(false);
 
   const active = tabs.find((t) => t.id === activeId) ?? null;
   // Read from the tab, not from a shared flag: switching tabs must not inherit
@@ -260,6 +265,20 @@ export default function Browser(): JSX.Element {
 
   const wv = activeGuest();
   const saved = active ? isBookmarked(bookmarks, active.url) : false;
+  /** What the stage currently measures along the axis the dock sits on. Adding
+   *  the panel back gives the total the two of them share, which is what the
+   *  resize has to clamp against. */
+  const dockAxis = devtools.side === "right" ? stage.w : stage.h;
+  /** The inspector's frontend is a native view: it has no z-index and paints
+   *  over every overlay in the cockpit, so it is hidden whenever one is up
+   *  rather than left sitting on top of a dialog the tester is trying to read.
+   *
+   *  A resize deliberately does NOT hide it. The worry was that the view would
+   *  swallow the pointer as the cursor crossed into it and strand the drag;
+   *  measured, it doesn't — pointer capture on the splitter holds across the
+   *  native view even on a fast flick — and blanking the panel mid-drag is a
+   *  flicker no browser has. */
+  const dockVisible = !(capture || settingsOpen || projectPickerOpen || authChallenge);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -326,9 +345,9 @@ export default function Browser(): JSX.Element {
             onClick={() => toggle("region")} title="Drag a box around the defect (⌘⇧R)">
             <Icon name="crop" /> Region
           </button>
-          <button className="btn btn--icon btn--ghost"
-            onClick={() => (wv?.isDevToolsOpened() ? wv.closeDevTools() : wv?.openDevTools())}
-            title="Inspect page"><Icon name="code" /></button>
+          <button className={`btn btn--icon ${devtools.open ? "btn--on" : "btn--ghost"}`}
+            onClick={() => openDevtools(!devtools.open)}
+            title="Inspect page (F12)"><Icon name="code" /></button>
         </div>
       </div>
 
@@ -416,49 +435,75 @@ export default function Browser(): JSX.Element {
 
       {stepsOpen && <StepsPanel />}
 
-      {/* stage — every tab stays mounted; only the active one is displayed */}
-      <div ref={stageRef}
-        className="relative mx-3 mb-3 flex flex-1 items-center justify-center overflow-hidden">
-        <div className="relative"
-          style={isFit
-            ? { width: "100%", height: "100%" }
-            : { width: device.w * scale, height: device.h * scale }}>
-          <div
-            className="glass-surface absolute left-0 top-0 overflow-hidden"
+      {/* stage + inspector. The dock is a sibling of the stage rather than an
+          overlay, so opening it shrinks the stage and the device frame re-fits
+          itself — a guest paints above host DOM, so anything laid over the page
+          would be invisible anyway. */}
+      <div
+        className={`mx-3 mb-3 flex min-h-0 min-w-0 flex-1 ${
+          devtools.side === "right" ? "flex-row" : "flex-col"} ${resizing ? "resizing" : ""}`}
+      >
+        {/* every tab stays mounted; only the active one is displayed */}
+        <div ref={stageRef}
+          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
+          <div className="relative"
             style={isFit
-              ? { width: "100%", height: "100%", borderRadius: 16 }
-              : {
-                width: device.w,
-                height: device.h,
-                borderRadius: deviceById(deviceId).mobile ? 22 : 12,
-                transform: `scale(${scale})`,
-                transformOrigin: "top left",
-              }}
-          >
-            {/* Loading feedback lives on the frame, not the page: the guest
-                paints over host DOM, so anything inside it would be hidden. */}
-            {active?.loading && <><div className="loadveil" /><div className="loadbar" /></>}
-            {tabs.map((t) => (
-              <GuestView
-                key={t.id}
-                tab={t}
-                active={t.id === activeId}
-                mode={mode}
-                recording={recording}
-                lang={settings.llm.ticketLang}
-                // FIT never transforms the frame; every other device is drawn at
-                // `scale`, so that is what the overlay must counter for.
-                frameScale={isFit ? 1 : scale}
-                register={register}
-                onNavigate={onGuestNavigate}
-                onState={updateTab}
-                onConsole={onGuestConsole}
-                onReadyChange={onReadyChange}
-                onInjectError={onInjectError}
-              />
-            ))}
+              ? { width: "100%", height: "100%" }
+              : { width: device.w * scale, height: device.h * scale }}>
+            <div
+              className="glass-surface absolute left-0 top-0 overflow-hidden"
+              style={isFit
+                ? { width: "100%", height: "100%", borderRadius: 16 }
+                : {
+                  width: device.w,
+                  height: device.h,
+                  borderRadius: deviceById(deviceId).mobile ? 22 : 12,
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                }}
+            >
+              {/* Loading feedback lives on the frame, not the page: the guest
+                  paints over host DOM, so anything inside it would be hidden. */}
+              {active?.loading && <><div className="loadveil" /><div className="loadbar" /></>}
+              {tabs.map((t) => (
+                <GuestView
+                  key={t.id}
+                  tab={t}
+                  active={t.id === activeId}
+                  mode={mode}
+                  recording={recording}
+                  lang={settings.llm.ticketLang}
+                  // FIT never transforms the frame; every other device is drawn at
+                  // `scale`, so that is what the overlay must counter for.
+                  frameScale={isFit ? 1 : scale}
+                  register={register}
+                  onNavigate={onGuestNavigate}
+                  onState={updateTab}
+                  onConsole={onGuestConsole}
+                  onReadyChange={onReadyChange}
+                  onInjectError={onInjectError}
+                />
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Keyed by tab: the host WebContents is single-use, so a different page
+            gets a fresh one rather than this one re-pointed at it. */}
+        {devtools.open && (
+          <DevTools
+            key={activeId}
+            getGuest={activeGuest}
+            side={devtools.side}
+            size={devtools.size[devtools.side]}
+            available={dockAxis + devtools.size[devtools.side]}
+            visible={dockVisible}
+            onSize={setDevtoolsSize}
+            onSide={setDevtoolsSide}
+            onResizing={setResizing}
+            onClose={() => openDevtools(false)}
+          />
+        )}
       </div>
     </div>
   );

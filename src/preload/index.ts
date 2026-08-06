@@ -5,8 +5,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC } from "../shared/ipc.js";
 import type {
-  AppSettings, CaptureContext, CreatedIssue, JiraBoard, JiraComment, JiraIssueDetail,
-  JiraProject, JiraStatus, JiraTransition, JiraUser, Result,
+  AppSettings, CaptureContext, CreatedIssue, DockBounds, JiraBoard, JiraComment,
+  JiraIssueDetail, JiraProject, JiraStatus, JiraTransition, JiraUser, Result,
 } from "../shared/types.js";
 import type { CreateOpts, Queue, QueueOpts, RetestOpts, RetestResult } from "../main/jira.js";
 import type { Review, ReviewInput } from "../main/llm.js";
@@ -68,6 +68,26 @@ const api = {
       ipcRenderer.invoke(IPC.authRespond, answer),
     savedCount: (): Promise<number> => ipcRenderer.invoke(IPC.authCount),
     forgetAll: (): Promise<Result<void>> => ipcRenderer.invoke(IPC.authForget),
+  },
+  /** The inspector, docked into the cockpit rather than a detached window. The
+   *  frontend is a native view owned by main — it cannot be laid out, only
+   *  positioned, so the renderer measures its slot and reports it. */
+  devtools: {
+    /** Inspect the guest with this webContents id, drawn at `box`. */
+    attach: (guestId: number, box: DockBounds, visible: boolean): Promise<Result<void>> =>
+      ipcRenderer.invoke(IPC.devtoolsAttach, guestId, box, visible),
+    /** Follow the slot as the layout moves it, and hide the view outright when
+     *  something is drawn over it — a native view cannot go behind a modal. */
+    bounds: (box: DockBounds, visible: boolean): Promise<Result<void>> =>
+      ipcRenderer.invoke(IPC.devtoolsBounds, box, visible),
+    detach: (): Promise<Result<void>> => ipcRenderer.invoke(IPC.devtoolsDetach),
+    /** F12 pressed inside the page under test — the cockpit never sees that key
+     *  itself, so main forwards it. */
+    onToggle: (cb: () => void): (() => void) => {
+      const listener = (): void => cb();
+      ipcRenderer.on(IPC.devtoolsToggle, listener);
+      return () => { ipcRenderer.removeListener(IPC.devtoolsToggle, listener); };
+    },
   },
   /** Per-project tabs and bookmarks, so a project reopens where it was left. */
   workspace: {

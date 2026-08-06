@@ -185,6 +185,21 @@ Screenshots come from `webview.capturePage()` (device pixels) and are cropped
 against boxes the guest reports (CSS pixels); the scale factor is derived from
 the captured image width, which also absorbs page zoom.
 
+The inspector (`F12`, or the `<>` button) docks into the window instead of
+opening the detached one Electron gives a `<webview>` — a guest has no window of
+its own, so it has no docked mode either. `setDevToolsWebContents` renders the
+frontend into a WebContents we supply, and that WebContents has to be a
+`WebContentsView`: Electron only grants the DevTools WebUI bindings
+(`window.DevToolsAPI`) to a real top-level WebContents. Aim it at a second
+`<webview>` — the recipe the internet still repeats — and the frontend loads and
+paints perfectly while silently falling back to `InspectorFrontendHostStub`,
+which drops every protocol message. What that looks like is an inspector with an
+empty DOM tree and a console that answers nothing, with no error anywhere.
+The price of a native view is that it ignores CSS and paints above all host DOM:
+it cannot be laid out, only positioned, so the renderer measures its slot every
+frame and reports it, and hides it outright whenever a modal is up — a view with
+no z-index would otherwise sit on top of the dialog being read.
+
 The tab strip follows Chrome: "new tab" sits directly after the last tab rather
 than at the right edge of the window, and tabs shrink to share the strip instead
 of staying fixed width and scrolling it — the second rule is what keeps the

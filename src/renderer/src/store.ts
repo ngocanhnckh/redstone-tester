@@ -20,6 +20,18 @@ const ERROR_CAP = 40;
 
 export type Orientation = "portrait" | "landscape";
 
+/** Which edge the inspector is docked against. */
+export type DockSide = "bottom" | "right";
+
+/** Kept per side: a panel that reads well as a 320px strip under the page is a
+ *  uselessly narrow column beside it, so switching sides must not carry the
+ *  other side's number over. */
+export interface DevtoolsState {
+  open: boolean;
+  side: DockSide;
+  size: Record<DockSide, number>;
+}
+
 /** An issue being retested in this window.
  *
  *  Deliberately not persisted with the workspace: a retest is a thing you are
@@ -83,6 +95,11 @@ export interface State {
   stepsOpen: boolean;
   consoleErrors: string[];
 
+  /** The inspector, docked into this window. Not persisted with the workspace:
+   *  it is a thing you open to look at something now, not a property of the
+   *  project — reopening a project into a half-height page nobody asked for. */
+  devtools: DevtoolsState;
+
   capture: CaptureContext | null;
   ticket: Ticket | null;
   aiReview: Review | null;
@@ -137,6 +154,10 @@ export interface State {
   addConsoleError: (e: string) => void;
   clearSteps: () => void;
 
+  openDevtools: (open: boolean) => void;
+  setDevtoolsSide: (side: DockSide) => void;
+  setDevtoolsSize: (px: number) => void;
+
   openComposer: (ctx: CaptureContext, ticket: Ticket) => void;
   closeComposer: () => void;
   setTicket: (t: Ticket) => void;
@@ -174,6 +195,8 @@ export const useStore = create<State>((set) => ({
   steps: [],
   stepsOpen: false,
   consoleErrors: [],
+
+  devtools: { open: false, side: "bottom", size: { bottom: 320, right: 460 } },
 
   capture: null,
   ticket: null,
@@ -262,6 +285,12 @@ export const useStore = create<State>((set) => ({
     s.consoleErrors.includes(e) ? s : { consoleErrors: [...s.consoleErrors, e].slice(-ERROR_CAP) }
   )),
   clearSteps: () => set({ steps: [], consoleErrors: [] }),
+
+  openDevtools: (open) => set((s) => ({ devtools: { ...s.devtools, open } })),
+  setDevtoolsSide: (side) => set((s) => ({ devtools: { ...s.devtools, side } })),
+  setDevtoolsSize: (px) => set((s) => ({
+    devtools: { ...s.devtools, size: { ...s.devtools.size, [s.devtools.side]: px } },
+  })),
 
   openComposer: (capture, ticket) =>
     set({ capture, ticket, mode: "off", aiReview: null, aiAnswers: {} }),
