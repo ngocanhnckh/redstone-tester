@@ -30,7 +30,7 @@ Windows shows a SmartScreen warning: *More info → Run anyway*.
 pnpm install
 pnpm dev        # hot-reloading development
 pnpm start      # run the built app
-pnpm test       # 136 unit tests
+pnpm test       # 242 unit tests
 
 pnpm release        # macOS (arm64 + x64) and Windows (x64) into release/
 pnpm release:mac
@@ -184,6 +184,16 @@ leaves the page pristine. They are plain strings the compiler can't check, so
 Screenshots come from `webview.capturePage()` (device pixels) and are cropped
 against boxes the guest reports (CSS pixels); the scale factor is derived from
 the captured image width, which also absorbs page zoom.
+
+The tab strip follows Chrome: "new tab" sits directly after the last tab rather
+than at the right edge of the window, and tabs shrink to share the strip instead
+of staying fixed width and scrolling it — the second rule is what keeps the
+button from scrolling out of reach, so the two only work together. Closing a tab
+then *freezes* the tab widths until the pointer leaves the strip, which looks
+like a layout bug and is the opposite: shrink-to-fit means every close re-flows
+the strip, so without the freeze the next tab's × slides out from under a
+stationary cursor and closing three tabs is three separate aiming problems —
+with a page under test as the cost of a misfire.
 
 Tabs stay mounted when inactive — unmounting would destroy the page and make
 every tab switch a reload — but only the focused tab is ever injected into, so a

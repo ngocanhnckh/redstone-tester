@@ -14,13 +14,13 @@ import { derivedSteps, normalizeAddress, pathOf } from "./urls.js";
 import {
   DEVICES, DEVICE_GROUPS, FIT, deviceById, describeDevice, fitScale, orient, userAgentFor,
 } from "./devices.js";
-import { isBookmarked, tabLabel } from "../../shared/tabs.js";
-import { fill, recorderPhrases } from "../../shared/i18n.js";
-import type { Tab } from "../../shared/tabs.js";
+import { isBookmarked } from "../../shared/tabs.js";
+import { recorderPhrases } from "../../shared/i18n.js";
 import StepsPanel from "./StepsPanel.js";
 import GuestView from "./GuestView.js";
 import Bookmarks from "./Bookmarks.js";
 import RetestBar from "./RetestBar.js";
+import TabStrip from "./TabStrip.js";
 
 export default function Browser(): JSX.Element {
   const {
@@ -263,25 +263,13 @@ export default function Browser(): JSX.Element {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* tab strip */}
-      <div className="no-drag flex items-end gap-1 px-3 pb-1.5">
-        <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto">
-          {tabs.map((t) => (
-            <TabChip
-              key={t.id}
-              tab={t}
-              active={t.id === activeId}
-              closable={tabs.length > 1}
-              onSelect={() => focusTab(t.id)}
-              onClose={() => shutTab(t.id)}
-            />
-          ))}
-        </div>
-        <button className="btn btn--icon btn--ghost shrink-0"
-          onClick={() => openTab(settings.homeUrl)} title="New tab (⌘T)">
-          <Icon name="plus" />
-        </button>
-      </div>
+      <TabStrip
+        tabs={tabs}
+        activeId={activeId}
+        onSelect={focusTab}
+        onClose={shutTab}
+        onNew={() => openTab(settings.homeUrl)}
+      />
 
       {/* address + controls */}
       <div className="no-drag flex items-center gap-2 px-3 pb-2">
@@ -476,30 +464,3 @@ export default function Browser(): JSX.Element {
   );
 }
 
-function TabChip({ tab, active, closable, onSelect, onClose }: {
-  tab: Tab; active: boolean; closable: boolean; onSelect: () => void; onClose: () => void;
-}): JSX.Element {
-  return (
-    <div
-      className={`group flex min-w-0 max-w-[190px] shrink-0 cursor-default items-center gap-1.5 rounded-t-lg px-2.5 py-1.5 text-[11.5px] ${
-        active ? "glass-surface" : "glass-inset"}`}
-      style={active ? undefined : { opacity: .7 }}
-      onMouseDown={onSelect}
-      title={tab.url}
-    >
-      {tab.loading
-        ? <span className="tabspin shrink-0" />
-        : <Icon name="globe" size={11} className="shrink-0 opacity-40" />}
-      <span className="min-w-0 flex-1 truncate">{tabLabel(tab)}</span>
-      {closable && (
-        <button
-          className="btn btn--icon btn--ghost !h-4 !w-4 shrink-0 opacity-0 group-hover:opacity-100"
-          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); onClose(); }}
-          title="Close tab"
-        >
-          <Icon name="close" size={10} />
-        </button>
-      )}
-    </div>
-  );
-}
