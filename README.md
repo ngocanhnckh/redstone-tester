@@ -183,6 +183,16 @@ still lays out at the device's real CSS width. There is exactly one `<webview>`
 in the tree across every device mode — rendering a second one in a branch would
 remount it and reload the page on each switch.
 
+The guest keeps real popups (`allowpopups`), because a great many staging sites
+are behind "Sign in with Google" and OAuth needs a genuine popup with a live
+`window.opener` to post its result back to — routed into a tab instead, the flow
+has nowhere to return to. The cockpit's own `setWindowOpenHandler` sends links to
+the system browser, and deliberately does not reach the guest. The attribute has
+to be written as a *string*: React types it as a boolean but has no such boolean
+attribute, so a `true` is dropped and the page under test simply cannot sign in.
+`GuestView.test.tsx` asserts what actually reached the element, since the whole
+failure is invisible from the JSX.
+
 Two guest-lifecycle rules the code depends on. `executeJavaScript` throws
 *synchronously* before `dom-ready`, so a trailing `.catch()` never sees it —
 every injection goes through `runInGuest`, gated on a ready flag that a new

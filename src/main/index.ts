@@ -54,8 +54,10 @@ function createWindow(project?: string): BrowserWindow {
 
   win.once("ready-to-show", () => win.show());
 
-  // Anything the app itself tries to open in a new window goes to the real
-  // browser; the guest's own popups are handled inside the renderer.
+  // Anything the *cockpit* tries to open in a new window goes to the real
+  // browser. This does not reach the guest: a page under test opens its popups
+  // through its own webContents, which keeps Electron's default (a real popup
+  // window) — an OAuth flow needs one, with a live `opener` to post back to.
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };

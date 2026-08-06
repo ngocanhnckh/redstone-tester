@@ -30,20 +30,11 @@ declare global {
   interface Window { tester: TesterApi }
 }
 
-// React 19 moved the JSX namespace out of global and into the `react` module, so
-// the <webview> intrinsic has to be declared there.
-declare module "react" {
-  namespace JSX {
-    interface IntrinsicElements {
-      webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
-        src?: string;
-        partition?: string;
-        allowpopups?: boolean;
-        useragent?: string;
-        webpreferences?: string;
-      };
-    }
-  }
-}
+// No JSX augmentation for <webview> here on purpose. @types/react already
+// declares the intrinsic (React.WebViewHTMLAttributes), and a second
+// declaration does not override it — it merges, loses, and is hidden by
+// skipLibCheck, so it reads as authoritative while having no effect at all.
+// Anything that looks wrong about the guest's props is wrong in React's
+// declaration, and has to be handled at the call site. See `GuestView.tsx`.
 
 export {};

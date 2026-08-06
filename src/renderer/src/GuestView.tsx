@@ -36,6 +36,20 @@ interface Props extends GuestEvents {
   register: (id: string, el: WebviewEl | null) => void;
 }
 
+/**
+ * `allowpopups` has to reach the DOM as a *string*.
+ *
+ * React types it as a boolean, but React DOM has no such boolean attribute, so
+ * a `true` is warned about and then dropped — the attribute never appears, and
+ * Electron reads this one by presence. The failure is entirely silent and lands
+ * a long way from here: every `window.open` in the page under test returns
+ * null, so a site's "Sign in with Google" does nothing, or reports that it
+ * could not read the profile it never got to ask for. Sites under test do sign
+ * in through OAuth popups, so this is load-bearing. `GuestView.test.tsx` asserts
+ * the attribute is actually on the element.
+ */
+const ALLOW_POPUPS = "true" as unknown as boolean;
+
 export default function GuestView({
   tab, active, mode, recording, lang, frameScale, register,
   onNavigate, onState, onConsole, onReadyChange, onInjectError,
@@ -197,7 +211,7 @@ export default function GuestView({
       ref={ref as unknown as React.Ref<HTMLElement>}
       src={initialUrl}
       partition="persist:rtt"
-      allowpopups
+      allowpopups={ALLOW_POPUPS}
       className={active && mode !== "off" ? "crosshair" : ""}
       // Hidden rather than unmounted: unmounting would destroy the page and make
       // every tab switch a reload.
