@@ -55,8 +55,14 @@ export default function Browser(): JSX.Element {
     guests.current.get(useStore.getState().activeId) ?? null, []);
 
   const register = useCallback((id: string, el: WebviewEl | null) => {
-    if (el) guests.current.set(id, el);
-    else guests.current.delete(id);
+    if (!el) { guests.current.delete(id); return; }
+    guests.current.set(id, el);
+    // A guest created while a device preset is active has only the session's
+    // desktop UA — `applyDevice` reached the guests that existed at the time.
+    // Without this, opening a tab under an iPhone preset serves it the desktop
+    // site at a phone width, which is not what any of it is for.
+    const ua = userAgentFor(deviceById(useStore.getState().deviceId));
+    if (ua) { try { el.setUserAgent(ua); } catch { /* not attached yet */ } }
   }, []);
 
   useEffect(() => {
