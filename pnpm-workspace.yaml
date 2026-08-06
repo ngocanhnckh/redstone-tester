@@ -1,6 +1,9 @@
+# electron and esbuild ship platform binaries via postinstall; tailwind's oxide is
+# a native addon. Without these the app has no runtime to launch.
 allowBuilds:
-  electron: set this to true or false
-  esbuild: set this to true or false
+  electron: true
+  esbuild: true
+  "@tailwindcss/oxide": true
 onlyBuiltDependencies:
   - electron
   - esbuild
